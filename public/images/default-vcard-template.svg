@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 520" fill="none">
+  <rect width="360" height="520" rx="18" fill="#F2F1FA"/>
+  <rect x="16" y="16" width="328" height="488" rx="12" fill="#fff" stroke="#DEDCEA" stroke-width="2"/>
+  <circle cx="180" cy="188" r="52" fill="#E8E5FA"/>
+  <path d="M180 158a30 30 0 1 0 0 60 30 30 0 0 0 0-60Zm-72 116c8-39 34-58 72-58s64 19 72 58" fill="#8A80D8"/>
+  <rect x="87" y="310" width="186" height="12" rx="6" fill="#DDD9F2"/>
+  <rect x="111" y="336" width="138" height="8" rx="4" fill="#ECEAF5"/>
+  <rect x="69" y="390" width="222" height="34" rx="17" fill="#F5F3FC"/>
+  <text x="180" y="412" text-anchor="middle" fill="#77718E" font-family="Arial,sans-serif" font-size="12">vCard template preview</text>
+</svg>
