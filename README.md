@@ -1,6 +1,6 @@
 # Northstar Admin Dashboard
 
-A responsive Laravel admin dashboard demo with password + email OTP sign-in, password recovery, account settings, superadmin-only admin, user, plan, and tax management, profile photos, configurable plan features, and user plan assignment.
+A responsive Laravel admin dashboard demo with password + email OTP sign-in, password recovery, account settings, superadmin-only admin, user, organization, plan, and tax management, profile photos, configurable plan features, and user and organization plan assignment.
 
 ## Requirements
 
@@ -64,16 +64,21 @@ All seeded role accounts use the demo password `password123`. Sign in with any o
 | Editor | `editor@example.com` |
 | Staff | `staff@example.com` |
 
-After entering a password, provide the email verification code delivered to the account address. When using the local `log` mail driver, find the code in `storage/logs/laravel.log`. Change or remove the demo credentials before using a deployed environment.
+After entering a password, provide the email verification code delivered to the account address. Registration also requires this code before the new account can access the dashboard. When using the local `log` mail driver, find the code in `storage/logs/laravel.log`. Change or remove the demo credentials before using a deployed environment.
 
 ## Authentication and access
 
-- Registration creates an active `staff` account and signs it in; public registration cannot choose an elevated role.
-- Password sign-in requires a second, six-digit email code. Codes are stored as hashes, expire after 10 minutes, are limited to five verification attempts, and can be resent with throttling.
+- Super Admin accounts are stored separately in `super_admins`; regular user management cannot list, delete, or assign the Super Admin role.
+- Registration creates an active `staff` account, then requires email OTP verification before sign-in; public registration cannot choose an elevated role.
+- Password sign-in and public registration require a second, six-digit email code before protected pages are accessible. Codes are stored as hashes, expire after 10 minutes, are limited to five verification attempts, and can be resent with throttling.
 - The standard Laravel password broker handles password reset tokens. Configure mail to deliver reset links.
 - Session regeneration, logout invalidation, CSRF protection, login throttling, and Laravel password hashing are enabled.
-- Only users with the `superadmin` role can access Admin and Users management. Admin accounts have a dedicated create, view, edit, search, activate/deactivate, and delete workflow.
+- Only the Super Admin guard can access Admin and Users management. Admin accounts have a dedicated create, view, edit, search, activate/deactivate, and delete workflow.
 - Only Super Admins can manage plans and tax settings. Plans support monthly, yearly, and unlimited frequency, configurable features and numeric limits, transactional single-default selection, and assignment-safe deletion.
+- Super Admins manage organizations through the `organizations.*` routes. Creating an organization transactionally creates a regular `staff` owner account, links it with the `owner` pivot role, assigns an optional active plan, and sends a signed email-verification link. Owners also use the existing email OTP login flow and can view only their own active organization.
+- Organization owners and active managers can add new member accounts or attach existing standard users, change organization-only roles (`member` or `manager`) and membership status, and remove memberships. New accounts receive a signed email-verification link. Removing a membership retains the user account and vCards; the organization owner cannot be edited or removed through member management.
+- Organization records use `organizations.email`, `owner_user_id`, and nullable `plan_id`; organization memberships use the existing `organization_users` pivot with `role` and `status`. vCards keep their user owner and have a nullable organization relationship; the organization migration backfills existing cards from membership records and uses `nullOnDelete` so records are retained. Assigned plans cannot be deleted until organizations are reassigned.
+- Deactivating an organization retains its users and vCards and removes those vCards from organization-member access. Deleting an organization detaches memberships and retains its user accounts and vCards.
 - Super Admins manage the vCard template catalog and uploaded previews. Plan editors select multiple active templates from the database; a template assigned to a plan cannot be deleted until it is removed from that plan.
 - Tax rates are configurable from Tax Settings. Current plan estimates add each active tax against the base price (additive, not compounded); changing rates does not rewrite historical transactions.
 - Standard user forms always create `staff` accounts and do not accept role changes. Superadmins manage roles on the separate user role page; role changes are also enforced on the server.

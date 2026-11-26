@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Admin Management')
-@section('breadcrumb', 'Admin')
+@section('breadcrumb')<span>Admin</span>@endsection
 @section('heading', 'Admin management')
 @section('subheading', 'Manage administrator accounts and access to your workspace.')
 @section('heading-action')<a class="button button-primary" href="{{ route('admin.create') }}"><i class="fa-solid fa-plus"></i> Add admin</a>@endsection

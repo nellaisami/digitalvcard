@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use App\Models\Organization;
 use App\Models\Plan;
+use App\Models\SuperAdmin;
 use App\Models\Vcard;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -13,8 +14,17 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        SuperAdmin::updateOrCreate(
+            ['email' => 'superadmin@example.com'],
+            [
+                'name' => 'Northstar Super Admin',
+                'password' => 'password123',
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ],
+        );
+
         foreach ([
-            ['Northstar Super Admin', 'superadmin@example.com', 'superadmin'],
             ['Alex Admin', 'admin@example.com', 'admin'],
             ['Morgan Manager', 'manager@example.com', 'manager'],
             ['Elliot Editor', 'editor@example.com', 'editor'],
@@ -27,7 +37,7 @@ class DatabaseSeeder extends Seeder
         }
 
         User::factory(max(0, 20 - User::count()))->create();
-        User::query()->whereNotIn('email', ['superadmin@example.com', 'admin@example.com', 'manager@example.com', 'editor@example.com', 'staff@example.com'])
+        User::query()->whereNotIn('email', ['admin@example.com', 'manager@example.com', 'editor@example.com', 'staff@example.com'])
             ->orderBy('id')
             ->limit(4)
             ->update(['status' => 'inactive']);
@@ -53,14 +63,17 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        User::where('email', 'superadmin@example.com')->update(['plan_id' => Plan::where('name', 'Enterprise')->value('id')]);
         User::whereIn('email', ['admin@example.com', 'manager@example.com'])->update(['plan_id' => Plan::where('name', 'Growth')->value('id')]);
 
         foreach (range(1, 24) as $index) {
             $user = User::query()->inRandomOrder()->first();
+            $organizationId = DB::table('organization_users')
+                ->where('user_id', $user->id)
+                ->orderBy('organization_id')
+                ->value('organization_id');
             Vcard::updateOrCreate(
                 ['title' => 'Business card '.$index],
-                ['user_id' => $user->id, 'status' => fake()->randomElement(['active', 'active', 'inactive'])],
+                ['user_id' => $user->id, 'organization_id' => $organizationId, 'status' => fake()->randomElement(['active', 'active', 'inactive'])],
             );
         }
     }

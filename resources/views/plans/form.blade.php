@@ -11,7 +11,7 @@
 @endphp
 @section('title', ($editing ? 'Edit' : 'Add').' plan')
 @section('breadcrumb')
-<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i>{{ $editing ? 'Edit' : 'Add' }} plan
+<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i><span>{{ $editing ? 'Edit' : 'Add' }} plan</span>
 @endsection
 @section('heading', $editing ? 'Edit plan' : 'Add new plan')
 @section('subheading', 'Set plan pricing, billing frequency, feature access, and limits.')

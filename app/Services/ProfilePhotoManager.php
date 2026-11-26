@@ -3,13 +3,14 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\SuperAdmin;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class ProfilePhotoManager
 {
-    public function sync(User $user, ?UploadedFile $photo, bool $remove): void
+    public function sync(User|SuperAdmin $user, ?UploadedFile $photo, bool $remove): void
     {
         if (! $photo && ! $remove) {
             return;

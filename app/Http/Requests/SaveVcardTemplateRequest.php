@@ -26,7 +26,7 @@ class SaveVcardTemplateRequest extends FormRequest
                 'image',
                 'mimes:jpg,jpeg,png,webp',
                 'max:2048',
-                'dimensions:min_width=1,min_height=1,max_width=4096,max_height=4096',
+                'dimensions:min_width=1,min_height=1,max_width=8192,max_height=8192',
             ],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ];

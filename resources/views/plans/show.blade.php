@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', $plan->name)
 @section('breadcrumb')
-<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i>{{ $plan->name }}
+<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i><span>{{ $plan->name }}</span>
 @endsection
 @section('heading', $plan->name)
 @section('subheading', 'Plan details, enabled features, limits, and current tax estimate.')

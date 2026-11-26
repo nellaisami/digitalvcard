@@ -153,7 +153,7 @@ class PlanController extends Controller
     {
         $assigned = DB::transaction(function () use ($plan): bool {
             $lockedPlan = Plan::query()->lockForUpdate()->findOrFail($plan->id);
-            if ($lockedPlan->users()->exists()) {
+            if ($lockedPlan->users()->exists() || $lockedPlan->organizations()->exists()) {
                 return true;
             }
 
@@ -163,7 +163,7 @@ class PlanController extends Controller
         });
 
         if ($assigned) {
-            return back()->with('error', 'This plan is assigned to users. Reassign them before deleting it.');
+            return back()->with('error', 'This plan is assigned to users or organizations. Reassign them before deleting it.');
         }
 
         return redirect()->route('plans.index')->with('status', 'Plan deleted successfully.');

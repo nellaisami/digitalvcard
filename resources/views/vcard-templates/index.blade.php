@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'vCard Templates')
-@section('breadcrumb', 'vCard Templates')
+@section('breadcrumb')<span>vCard Templates</span>@endsection
 @section('heading', 'vCard templates')
 @section('subheading', 'Manage the designs Super Admins can include in subscription plans.')
 @section('heading-action')
@@ -17,13 +17,13 @@
     @if($templates->isEmpty())
         <div class="empty-state"><span><i class="fa-regular fa-images"></i></span><strong>No vCard templates found</strong><p>Add a template with a preview image before assigning it to plans.</p><a class="button button-primary button-small" href="{{ route('vcard-templates.create') }}">Add template</a></div>
     @else
-        <div class="table-scroll"><table><thead><tr><th>ID</th><th>PREVIEW</th><th>TEMPLATE NAME</th><th>DESCRIPTION</th><th>ASSIGNED PLANS</th><th>STATUS</th><th>CREATED</th><th class="actions-heading">ACTIONS</th></tr></thead><tbody>
+        <div class="table-scroll"><table><thead><tr><th>ID</th><th>PREVIEW</th><th>PREVIEW URL</th><th>TEMPLATE NAME</th><th>ASSIGNED PLANS</th><th>STATUS</th><th>CREATED</th><th class="actions-heading">ACTIONS</th></tr></thead><tbody>
         @foreach($templates as $template)
             <tr>
                 <td>{{ $template->id }}</td>
                 <td><img class="template-table-preview" src="{{ $template->image_url }}" alt="{{ $template->name }} template preview" data-template-image></td>
+                <td><a href="{{ $template->image_url }}" target="_blank" rel="noopener noreferrer">{{ $template->image_url }}</a></td>
                 <td><strong>{{ $template->name }}</strong></td>
-                <td>{{ $template->description ?: '—' }}</td>
                 <td>{{ $template->plans_count }}</td>
                 <td><div class="status-control"><button type="button" class="toggle-switch" role="switch" aria-checked="{{ $template->status === 'active' ? 'true' : 'false' }}" aria-label="Toggle {{ $template->name }} status" data-async-toggle data-toggle-url="{{ route('vcard-templates.status', $template) }}" data-toggle-kind="status"><span></span></button><span class="status-badge {{ $template->status === 'active' ? 'status-active' : 'status-inactive' }}" data-toggle-label>{{ ucfirst($template->status) }}</span></div></td>
                 <td class="date-cell">{{ $template->created_at->format('M j, Y') }}</td>

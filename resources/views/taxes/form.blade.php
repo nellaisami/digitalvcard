@@ -2,7 +2,7 @@
 @php($editing = $tax->exists)
 @section('title', ($editing ? 'Edit' : 'Add').' tax')
 @section('breadcrumb')
-<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i><a href="{{ route('taxes.index') }}">Tax settings</a><i class="fa-solid fa-chevron-right"></i>{{ $editing ? 'Edit' : 'Add' }} tax
+<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i><a href="{{ route('taxes.index') }}">Tax settings</a><i class="fa-solid fa-chevron-right"></i><span>{{ $editing ? 'Edit' : 'Add' }} tax</span>
 @endsection
 @section('heading', $editing ? 'Edit tax' : 'Add tax')
 @section('subheading', 'Tax rates are calculated against the plan base price; multiple active taxes are additive.')

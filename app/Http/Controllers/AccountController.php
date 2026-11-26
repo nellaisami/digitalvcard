@@ -6,7 +6,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Hash;
-use App\Models\User;
+use App\Models\SuperAdmin;
 use App\Services\ProfilePhotoManager;
 use App\Support\ProfilePhotoRules;
 use Illuminate\Validation\Rules\Password;
@@ -21,16 +21,25 @@ class AccountController extends Controller
 
     public function update(Request $request, ProfilePhotoManager $photos): RedirectResponse
     {
-        /** @var User $user */
         $user = $request->user();
+        $usernameRules = ['required', 'string', 'max:50'];
+        $emailRules = ['required', 'email', 'max:255'];
+        if ($user instanceof SuperAdmin) {
+            $usernameRules[] = Rule::unique('users', 'username');
+            $usernameRules[] = Rule::unique('super_admins', 'username')->ignore($user);
+            $emailRules[] = Rule::unique('users', 'email');
+            $emailRules[] = Rule::unique('super_admins', 'email')->ignore($user);
+        } else {
+            $usernameRules[] = Rule::unique('users', 'username')->ignore($user);
+            $usernameRules[] = Rule::unique('super_admins', 'username');
+            $emailRules[] = Rule::unique('users', 'email')->ignore($user);
+            $emailRules[] = Rule::unique('super_admins', 'email');
+        }
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique(User::class, 'email')->ignore($user)],
+            'username' => $usernameRules,
+            'email' => $emailRules,
             'contact_no' => ['nullable', 'string', 'max:30'],
-            'address' => ['nullable', 'string', 'max:255'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'postal_code' => ['nullable', 'string', 'max:20'],
             'profile_photo' => ProfilePhotoRules::rules(),
             'remove_photo' => ['sometimes', 'boolean'],
         ]);
@@ -48,7 +57,7 @@ class AccountController extends Controller
     {
         $data = $request->validate([
             'current_password' => ['required', 'current_password'],
-            'password' => ['required', 'confirmed', Password::min(8)],
+            'password' => ['required', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
         ]);
         $request->user()->update(['password' => $data['password']]);
 

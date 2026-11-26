@@ -1,0 +1,25 @@
+.field-validation-error {
+    display: block;
+    color: #dc6376;
+    font-size: 0.62rem;
+    line-height: 1.35;
+    margin: 0.35rem 0 0.7rem 0.1rem;
+
+}
+
+.field-validation-error:empty {
+    display: none;
+}
+
+.auth-form .input-wrap.is-invalid,
+.form-field input.is-invalid,
+.form-field select.is-invalid,
+.form-field textarea.is-invalid {
+    border-color: #dc6376;
+    box-shadow: 0 0 0 3px rgba(220, 99, 118, 0.12);
+}
+
+.template-image-editor.is-invalid .photo-upload-button {
+    border-color: #dc6376;
+    box-shadow: 0 0 0 3px rgba(220, 99, 118, 0.12);
+}

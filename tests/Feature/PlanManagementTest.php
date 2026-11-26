@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Plan;
+use App\Models\SuperAdmin;
 use App\Models\Tax;
 use App\Models\User;
 use App\Models\VcardTemplate;
@@ -23,8 +24,11 @@ class PlanManagementTest extends TestCase
         $this->post('/taxes', [])->assertForbidden();
         $this->post('/vcard-templates', [])->assertForbidden();
 
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
-        $this->actingAs($superadmin)->get('/plans')->assertOk()->assertSee('Add new plan');
+        $superadmin = SuperAdmin::factory()->create();
+        $this->actingAs($superadmin, 'superadmin')->get('/plans')
+            ->assertOk()
+            ->assertSee('<span>Plan Management</span>', false)
+            ->assertSee('Add new plan');
         $this->get('/plans/create')->assertOk()->assertSee('Select all features');
         $this->get('/taxes')->assertOk()->assertSee('Tax settings');
         $this->get('/taxes/create')->assertOk()->assertSee('Tax percentage');
@@ -34,8 +38,8 @@ class PlanManagementTest extends TestCase
 
     public function test_plan_configuration_features_limits_default_and_assignment_deletion_safety(): void
     {
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
-        $this->actingAs($superadmin);
+        $superadmin = SuperAdmin::factory()->create();
+        $this->actingAs($superadmin, 'superadmin');
         $templateOne = VcardTemplate::create([
             'name' => 'Jewellery',
             'image_path' => 'vcard-templates/jewellery.png',
@@ -68,7 +72,10 @@ class PlanManagementTest extends TestCase
         ])->assertRedirect();
 
         $growth = Plan::where('name', 'Growth')->firstOrFail();
-        $this->get('/plans/'.$growth->id.'/edit')->assertOk()->assertSee('Number of Organization Users');
+        $this->get('/plans/'.$growth->id.'/edit')
+            ->assertOk()
+            ->assertSee('<span>Edit plan</span>', false)
+            ->assertSee('Number of Organization Users');
         $this->assertSame('yearly', $growth->frequency);
         $this->assertSame(14, $growth->trial_days);
         $this->assertSame(['services', 'no_of_visitors', 'no_of_organization_users', 'no_of_vcards'], $growth->features);
@@ -122,8 +129,8 @@ class PlanManagementTest extends TestCase
 
     public function test_default_plan_is_unique_and_must_remain_active(): void
     {
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
-        $this->actingAs($superadmin);
+        $superadmin = SuperAdmin::factory()->create();
+        $this->actingAs($superadmin, 'superadmin');
         $template = VcardTemplate::create([
             'name' => 'Default Template',
             'image_path' => 'vcard-templates/default.png',
@@ -162,8 +169,8 @@ class PlanManagementTest extends TestCase
 
     public function test_tax_crud_validation_and_additive_plan_tax_estimate(): void
     {
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
-        $this->actingAs($superadmin);
+        $superadmin = SuperAdmin::factory()->create();
+        $this->actingAs($superadmin, 'superadmin');
         $plan = Plan::create([
             'name' => 'Taxable',
             'price' => 1000,
@@ -208,7 +215,7 @@ class PlanManagementTest extends TestCase
 
     public function test_plan_search_pagination_and_user_plan_display_include_frequency_and_price(): void
     {
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
+        $superadmin = SuperAdmin::factory()->create();
         $plan = Plan::create([
             'name' => 'Quarterly Team',
             'price' => 45,
@@ -233,7 +240,7 @@ class PlanManagementTest extends TestCase
             ]);
         }
 
-        $this->actingAs($superadmin)
+        $this->actingAs($superadmin, 'superadmin')
             ->get('/plans?search=Quarterly')
             ->assertOk()
             ->assertSee('Quarterly Team')

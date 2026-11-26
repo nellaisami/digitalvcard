@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Users')
-@section('breadcrumb', 'Users')
+@section('breadcrumb')<span>Users</span>@endsection
 @section('heading', 'Users')
 @section('subheading', 'Manage user profiles, plans, verification, and account status.')
 @section('heading-action')<a class="button button-primary" href="{{ route('users.create') }}"><i class="fa-solid fa-plus"></i> Add user</a>@endsection

@@ -4,16 +4,28 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\TaxController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VcardTemplateController;
+use App\Http\Middleware\EnsureEmailIsVerified;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
 
-Route::middleware('guest')->group(function (): void {
+Route::get('/admin/{user}/verify-email/{hash}', [AdminController::class, 'verifyEmail'])
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('admin.email.verify');
+Route::get('/organizations/{organization}/verify-owner-email/{hash}', [OrganizationController::class, 'verifyOwnerEmail'])
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('organizations.owner.verify');
+Route::get('/organizations/{organization}/verify-member-email/{member}/{hash}', [OrganizationController::class, 'verifyMemberEmail'])
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('organizations.member.verify');
+
+Route::middleware('guest:superadmin,web')->group(function (): void {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1')->name('login.store');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
@@ -27,7 +39,7 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
 });
 
-Route::middleware('auth')->group(function (): void {
+Route::middleware(['auth:superadmin,web', EnsureEmailIsVerified::class])->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/account', [AccountController::class, 'edit'])->name('account.edit');
@@ -49,8 +61,19 @@ Route::middleware('auth')->group(function (): void {
         Route::resource('taxes', TaxController::class)->except(['show']);
         Route::patch('/vcard-templates/{vcard_template}/status', [VcardTemplateController::class, 'toggleStatus'])->name('vcard-templates.status');
         Route::resource('vcard-templates', VcardTemplateController::class)->except(['show']);
+        Route::patch('/organizations/{organization}/status', [OrganizationController::class, 'toggleStatus'])->name('organizations.status');
+        Route::post('/organizations/{organization}/verification/resend', [OrganizationController::class, 'resendVerification'])->name('organizations.verification.resend');
+        Route::patch('/organizations/{organization}/owner/password', [OrganizationController::class, 'updateOwnerPassword'])->name('organizations.owner.password');
+        Route::resource('organizations', OrganizationController::class)->except(['show']);
     });
 
-    Route::get('/organizations', [SectionController::class, 'organizations'])->name('organizations.index');
+    Route::get('/organizations/my-organization', [OrganizationController::class, 'mine'])->name('organizations.mine');
+    Route::get('/organizations/{organization}/users/create', [OrganizationController::class, 'createUser'])->name('organizations.users.create');
+    Route::post('/organizations/{organization}/users', [OrganizationController::class, 'storeUser'])->name('organizations.users.store');
+    Route::get('/organizations/{organization}/users/{member}/edit', [OrganizationController::class, 'editUser'])->name('organizations.users.edit');
+    Route::patch('/organizations/{organization}/users/{member}', [OrganizationController::class, 'updateUser'])->name('organizations.users.update');
+    Route::patch('/organizations/{organization}/users/{member}/status', [OrganizationController::class, 'toggleUserStatus'])->name('organizations.users.status');
+    Route::delete('/organizations/{organization}/users/{member}', [OrganizationController::class, 'destroyUser'])->name('organizations.users.destroy');
+    Route::get('/organizations/{organization}', [OrganizationController::class, 'show'])->name('organizations.show');
     Route::get('/vcards', [SectionController::class, 'vcards'])->name('vcards.index');
 });

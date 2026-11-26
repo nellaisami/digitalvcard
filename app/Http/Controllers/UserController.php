@@ -6,6 +6,7 @@ use App\Http\Requests\SaveUserRequest;
 use App\Http\Requests\UpdateUserRoleRequest;
 use App\Models\Plan;
 use App\Models\User;
+use App\Notifications\OrganizationOwnerEmailVerificationNotification;
 use App\Services\ProfilePhotoManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -37,7 +38,7 @@ class UserController extends Controller
         return view('users.index', [
             'users' => $users,
             'plans' => Plan::orderBy('name')->get(),
-            'roles' => ['superadmin', 'admin', 'manager', 'editor', 'staff'],
+            'roles' => ['admin', 'manager', 'editor', 'staff'],
         ]);
     }
 
@@ -90,8 +91,13 @@ class UserController extends Controller
         if ($user->email !== $data['email']) {
             $data['email_verified_at'] = null;
         }
+        $emailChanged = $user->email !== $data['email'];
+        $ownedOrganizations = $emailChanged ? $user->ownedOrganizations()->get() : collect();
         $user->update($data);
         $photos->sync($user, $request->file('profile_photo'), $request->boolean('remove_photo'));
+        foreach ($ownedOrganizations as $organization) {
+            $user->notify(new OrganizationOwnerEmailVerificationNotification($organization));
+        }
 
         return redirect()->route('users.index')->with('status', 'User updated successfully.');
     }
@@ -104,10 +110,6 @@ class UserController extends Controller
     public function updateRole(UpdateUserRoleRequest $request, User $user): RedirectResponse
     {
         $role = $request->validated('role');
-        if ($user->role === 'superadmin' && $role !== 'superadmin' && User::where('role', 'superadmin')->count() <= 1) {
-            return back()->withErrors(['role' => 'At least one Super Admin account must remain.']);
-        }
-
         $user->update(['role' => $role]);
 
         return redirect()->route('users.index')->with('status', 'User role updated.');
@@ -145,6 +147,9 @@ class UserController extends Controller
     {
         if ($request->user()->is($user)) {
             return back()->withErrors(['user' => 'You cannot delete the account you are currently using.']);
+        }
+        if ($user->ownedOrganizations()->exists()) {
+            return back()->withErrors(['user' => 'Delete or transfer this user’s organization ownership before deleting the account.']);
         }
 
         $photo = $user->profile_photo;

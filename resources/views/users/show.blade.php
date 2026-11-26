@@ -3,7 +3,7 @@
 @php($routePrefix = $adminMode ? 'admin' : 'users')
 @section('title', ($adminMode ? 'Admin' : 'User').' details')
 @section('breadcrumb')
-<a href="{{ route($routePrefix.'.index') }}">{{ $adminMode ? 'Admin' : 'Users' }}</a><i class="fa-solid fa-chevron-right"></i>Details
+<a href="{{ route($routePrefix.'.index') }}">{{ $adminMode ? 'Admin' : 'Users' }}</a><i class="fa-solid fa-chevron-right"></i><span>Details</span>
 @endsection
 @section('heading', ($adminMode ? 'Admin' : 'User').' details')
 @section('subheading', 'Profile, plan, and access information for this account.')

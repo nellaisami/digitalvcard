@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Plan Management')
-@section('breadcrumb', 'Plan Management')
+@section('breadcrumb')<span>Plan Management</span>@endsection
 @section('heading', 'Plan management')
 @section('subheading', 'Configure subscription pricing, access features, limits, and taxes.')
 @section('heading-action')

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', $title)
-@section('breadcrumb', $title)
+@section('breadcrumb')<span>{{ $title }}</span>@endsection
 @section('heading', $title)
 @section('subheading', $description)
 @if(isset($createUrl))@section('heading-action')<a class="button button-primary" href="{{ $createUrl }}"><i class="fa-solid fa-plus"></i> {{ $createLabel }}</a>@endsection @endif

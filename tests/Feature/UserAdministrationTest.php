@@ -3,9 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Plan;
+use App\Models\SuperAdmin;
 use App\Models\User;
+use App\Notifications\AdminEmailVerificationNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
@@ -17,14 +20,14 @@ class UserAdministrationTest extends TestCase
     public function test_admins_can_be_created_searched_updated_toggled_and_deleted_with_photos(): void
     {
         Storage::fake('public');
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
-        $this->actingAs($superadmin)->get('/admin/create')->assertOk()->assertDontSee('name="role"', false);
+        $superadmin = SuperAdmin::factory()->create();
+        $this->actingAs($superadmin, 'superadmin')->get('/admin/create')->assertOk()->assertDontSee('name="role"', false);
 
         $this->post('/admin', [
             'name' => 'Workspace Admin',
             'email' => 'workspace-admin@example.com',
-            'password' => 'strong-password',
-            'password_confirmation' => 'strong-password',
+            'password' => 'Strong-pass1!',
+            'password_confirmation' => 'Strong-pass1!',
             'contact_no' => '555-0198',
             'status' => 'active',
             'role' => 'superadmin',
@@ -38,7 +41,7 @@ class UserAdministrationTest extends TestCase
         $oldPhoto = $admin->profile_photo;
         $this->get('/admin?search=workspace-admin')->assertOk()->assertSee('Workspace Admin');
         $this->get('/admin/'.$admin->id.'/edit')->assertOk();
-        $this->get('/admin/'.$superadmin->id)->assertNotFound();
+        $this->assertDatabaseMissing('users', ['email' => $superadmin->email]);
 
         $this->put('/admin/'.$admin->id, [
             'name' => 'Updated Admin',
@@ -63,13 +66,71 @@ class UserAdministrationTest extends TestCase
         Storage::disk('public')->assertMissing($currentPhoto);
     }
 
+    public function test_admin_creation_requires_a_strong_password_but_contact_is_optional(): void
+    {
+        $superadmin = SuperAdmin::factory()->create();
+        $this->actingAs($superadmin, 'superadmin');
+
+        $this->from('/admin/create')->post('/admin', [
+            'name' => 'Invalid Admin',
+            'email' => 'invalid-admin@example.com',
+            'password' => 'weakpassword',
+            'password_confirmation' => 'weakpassword',
+            'contact_no' => '555-0198',
+            'status' => 'active',
+        ])->assertSessionHasErrors('password');
+        $this->assertDatabaseMissing('users', ['email' => 'invalid-admin@example.com']);
+
+        $this->post('/admin', [
+            'name' => 'Invalid Admin',
+            'email' => 'invalid-admin@example.com',
+            'password' => 'Strong-pass1!',
+            'password_confirmation' => 'Strong-pass1!',
+            'status' => 'active',
+        ])->assertRedirect('/admin');
+        $this->assertDatabaseHas('users', ['email' => 'invalid-admin@example.com', 'contact_no' => null]);
+    }
+
+    public function test_admin_creation_sends_a_signed_email_verification_link(): void
+    {
+        Notification::fake();
+        $superadmin = SuperAdmin::factory()->create();
+        $this->actingAs($superadmin, 'superadmin')->post('/admin', [
+            'name' => 'Email Admin',
+            'email' => 'email-admin@example.com',
+            'password' => 'Strong-pass1!',
+            'password_confirmation' => 'Strong-pass1!',
+            'contact_no' => '555-0198',
+            'status' => 'active',
+        ])->assertRedirect('/admin');
+
+        $admin = User::where('email', 'email-admin@example.com')->firstOrFail();
+        Notification::assertSentTo($admin, AdminEmailVerificationNotification::class);
+        $this->assertNull($admin->email_verified_at);
+
+        $invalidUrl = URL::temporarySignedRoute('admin.email.verify', now()->addMinutes(10), [
+            'user' => $admin->id,
+            'hash' => sha1('different@example.com'),
+        ]);
+        $this->get($invalidUrl)->assertForbidden();
+
+        $verificationUrl = URL::temporarySignedRoute('admin.email.verify', now()->addMinutes(10), [
+            'user' => $admin->id,
+            'hash' => sha1($admin->email),
+        ]);
+        $this->get($verificationUrl)
+            ->assertRedirect('/login')
+            ->assertSessionHas('status', 'Email address verified. You can now sign in.');
+        $this->assertNotNull($admin->fresh()->email_verified_at);
+    }
+
     public function test_user_creation_role_plan_photo_and_verification_are_superadmin_controlled(): void
     {
         Storage::fake('public');
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
+        $superadmin = SuperAdmin::factory()->create();
         $starter = Plan::create(['name' => 'Starter', 'price' => 0, 'status' => 'active']);
         $growth = Plan::create(['name' => 'Growth', 'price' => 20, 'status' => 'active']);
-        $this->actingAs($superadmin)->get('/users/create')->assertOk()->assertDontSee('name="role"', false);
+        $this->actingAs($superadmin, 'superadmin')->get('/users/create')->assertOk()->assertDontSee('name="role"', false);
 
         $this->post('/users', [
             'name' => 'Plan Member',
@@ -145,10 +206,10 @@ class UserAdministrationTest extends TestCase
 
     public function test_role_changes_are_separate_and_restricted_to_superadmins(): void
     {
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
+        $superadmin = SuperAdmin::factory()->create();
         $user = User::factory()->create(['role' => 'staff']);
 
-        $this->actingAs($superadmin)->get('/users/'.$user->id.'/role')->assertOk();
+        $this->actingAs($superadmin, 'superadmin')->get('/users/'.$user->id.'/role')->assertOk();
         $this->put('/users/'.$user->id, [
             'name' => $user->name,
             'email' => $user->email,
@@ -161,12 +222,12 @@ class UserAdministrationTest extends TestCase
         $this->patch('/users/'.$user->id.'/role', ['role' => 'manager'])->assertRedirect('/users');
         $this->assertSame('manager', $user->fresh()->role);
 
-        $this->patch('/users/'.$superadmin->id.'/role', ['role' => 'staff'])->assertSessionHasErrors('role');
-        $this->delete('/users/'.$superadmin->id)->assertSessionHasErrors('user');
-        $this->assertDatabaseHas('users', ['id' => $superadmin->id, 'role' => 'superadmin']);
+        $this->patch('/users/'.$user->id.'/role', ['role' => 'superadmin'])->assertSessionHasErrors('role');
+        $this->assertDatabaseHas('super_admins', ['id' => $superadmin->id, 'email' => $superadmin->email]);
+        $this->assertDatabaseMissing('users', ['email' => $superadmin->email]);
 
-        $this->actingAs($user->fresh())->patchJson('/users/'.$superadmin->id.'/verification')->assertForbidden();
-        $this->patchJson('/users/'.$superadmin->id.'/role', ['role' => 'staff'])->assertForbidden();
+        $this->actingAs($user->fresh())->patchJson('/users/'.$user->id.'/verification')->assertForbidden();
+        $this->patchJson('/users/'.$user->id.'/role', ['role' => 'staff'])->assertForbidden();
         $this->post('/users', [])->assertForbidden();
         $this->post('/admin', [])->assertForbidden();
     }
@@ -174,8 +235,8 @@ class UserAdministrationTest extends TestCase
     public function test_superadmin_can_update_and_remove_their_own_profile_photo(): void
     {
         Storage::fake('public');
-        $superadmin = User::factory()->create(['role' => 'superadmin', 'email' => 'profile@example.com']);
-        $this->actingAs($superadmin);
+        $superadmin = SuperAdmin::factory()->create(['email' => 'profile@example.com']);
+        $this->actingAs($superadmin, 'superadmin');
         $this->get('/account')->assertOk();
 
         $this->from('/account')->put('/account', [
@@ -226,11 +287,11 @@ class UserAdministrationTest extends TestCase
     public function test_user_listing_is_paginated_and_invalid_photos_are_rejected(): void
     {
         Storage::fake('public');
-        $superadmin = User::factory()->create(['role' => 'superadmin']);
+        $superadmin = SuperAdmin::factory()->create();
         User::factory(11)->create();
-        $this->actingAs($superadmin)->get('/users?page=2')
+        $this->actingAs($superadmin, 'superadmin')->get('/users?page=2')
             ->assertOk()
-            ->assertSee('Showing 11–12 of 12 users');
+            ->assertSee('Showing 11–11 of 11 users');
 
         $this->from('/users/create')->post('/users', [
             'name' => 'Invalid Photo User',

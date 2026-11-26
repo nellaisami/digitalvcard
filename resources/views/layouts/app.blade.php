@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="{{ asset('css/admin.css') }}">
     <link rel="stylesheet" href="{{ asset('css/management.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/form-validation.css') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script>if(localStorage.getItem('admin-theme')==='dark')document.documentElement.dataset.theme='dark';</script>
     @stack('head')
@@ -21,7 +22,7 @@
 <div class="app-shell">
     <div class="sidebar-scrim" data-sidebar-close></div>
     <aside class="sidebar" id="sidebar">
-        <a class="brand" href="{{ route('dashboard') }}"><span class="brand-mark"><i class="fa-solid fa-n"></i></span><span>northstar<span class="brand-dot">.</span><small>ADMIN CONSOLE</small></span></a>
+        <a class="brand" href="{{ route('dashboard') }}"><span class="brand-mark"><i class="fa-solid fa-n"></i></span><span>nellaimedia<small>ADMIN CONSOLE</small></span></a>
         <div class="nav-caption">WORKSPACE</div>
         <nav class="side-nav" aria-label="Main navigation">
             <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"><i class="fa-solid fa-grip"></i><span>Dashboard</span></a>
@@ -30,8 +31,10 @@
                 <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}" href="{{ route('users.index') }}"><i class="fa-solid fa-users"></i><span>Users</span></a>
                 <a class="nav-link {{ request()->routeIs('plans.*', 'taxes.*') ? 'active' : '' }}" href="{{ route('plans.index') }}"><i class="fa-solid fa-layer-group"></i><span>Plans</span></a>
                 <a class="nav-link {{ request()->routeIs('vcard-templates.*') ? 'active' : '' }}" href="{{ route('vcard-templates.index') }}"><i class="fa-regular fa-images"></i><span>vCard Templates</span></a>
+                <a class="nav-link {{ request()->routeIs('organizations.*') ? 'active' : '' }}" href="{{ route('organizations.index') }}"><i class="fa-regular fa-building"></i><span>Organizations</span></a>
+            @elseif(auth()->user()->ownedOrganizations()->exists() || auth()->user()->organizations()->wherePivot('role', 'manager')->wherePivot('status', 'active')->where('organizations.status', 'active')->exists())
+                <a class="nav-link {{ request()->routeIs('organizations.mine', 'organizations.show') ? 'active' : '' }}" href="{{ route('organizations.mine') }}"><i class="fa-regular fa-building"></i><span>My Organization</span></a>
             @endif
-            <a class="nav-link {{ request()->routeIs('organizations.*') ? 'active' : '' }}" href="{{ route('organizations.index') }}"><i class="fa-regular fa-building"></i><span>Organizations</span></a>
             <a class="nav-link {{ request()->routeIs('vcards.*') ? 'active' : '' }}" href="{{ route('vcards.index') }}"><i class="fa-regular fa-address-card"></i><span>vCards</span></a>
         </nav>
         <div class="nav-caption nav-caption-lower">PREFERENCES</div>
@@ -39,15 +42,15 @@
             <a class="nav-link {{ request()->routeIs('account.*') ? 'active' : '' }}" href="{{ route('account.edit') }}"><i class="fa-solid fa-sliders"></i><span>Settings</span></a>
         </nav>
         <div class="sidebar-bottom">
-            <div class="help-card"><span class="help-icon"><i class="fa-regular fa-circle-question"></i></span><strong>Need a hand?</strong><p>Visit our help center for tips and answers.</p><a href="mailto:support@example.com">Get support <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div>
-            <div class="sidebar-foot">© {{ date('Y') }} Northstar Inc.</div>
+            <div class="help-card"><span class="help-icon"><i class="fa-regular fa-circle-question"></i></span><strong>Need a hand?</strong><p>Visit our help center for tips and answers.</p><a href="mailto:nellaisami@gmail.com">Get support <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div>
+            <div class="sidebar-foot">© {{ date('Y') }} Nellaimedia Inc.</div>
         </div>
     </aside>
     <main class="main-area">
         <header class="topbar">
             <button type="button" class="icon-button mobile-menu" aria-label="Open menu" data-sidebar-open><i class="fa-solid fa-bars"></i></button>
             @if(auth()->user()->role === 'superadmin')
-                <form method="GET" action="{{ route('users.index') }}" class="top-search"><i class="fa-solid fa-magnifying-glass"></i><input id="quick-search" name="search" value="{{ request('search') }}" placeholder="Search users..." autocomplete="off"><kbd>⌘ K</kbd></form>
+                <form method="GET" action="{{ route('users.index') }}" class="top-search"><i class="fa-solid fa-magnifying-glass"></i><input id="quick-search" name="search" value="{{ request('search') }}" placeholder="Search users..." autocomplete="off"></form>
             @else
                 <span class="top-workspace-label">Workspace overview</span>
             @endif
@@ -71,7 +74,8 @@
         </header>
         <div class="content-wrap">
             <div class="page-heading">
-                <div><div class="breadcrumbs"><a href="{{ route('dashboard') }}">Workspace</a><i class="fa-solid fa-chevron-right"></i><span>@yield('breadcrumb', 'Overview')</span></div><h1>@yield('heading', 'Dashboard overview')</h1><p>@yield('subheading', 'Here’s what’s happening across your workspace today.')</p></div>
+                <div><div class="breadcrumbs"><a href="{{ route('dashboard') }}">Workspace</a><i class="fa-solid fa-chevron-right"></i>@hasSection('breadcrumb')@yield('breadcrumb')@else<span>Overview</span>@endif</div>
+                    <h1>@yield('heading', 'Dashboard overview')</h1><p>@yield('subheading', 'Here’s what’s happening across your workspace today.')</p></div>
                 @yield('heading-action')
             </div>
             @if(session('status'))<div class="alert alert-success" data-flash-toast data-toast-message="{{ session('status') }}" data-toast-type="success"><i class="fa-solid fa-circle-check"></i>{{ session('status') }}<button type="button" data-dismiss>&times;</button></div>@endif
@@ -79,7 +83,7 @@
             @if($errors->any())<div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><div><strong>Please check the form details.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div><button type="button" data-dismiss>&times;</button></div>@endif
             @yield('content')
         </div>
-        <footer class="footer"><span>© {{ date('Y') }} Northstar Admin. All rights reserved.</span><span>Made for teams that move forward <i class="fa-solid fa-heart"></i></span></footer>
+        <footer class="footer"><span>© {{ date('Y') }} Nellaimedia Admin. All rights reserved.</span><span>Made for teams that move forward <i class="fa-solid fa-heart"></i></span></footer>
     </main>
 </div>
 <script src="{{ asset('js/admin.js') }}"></script>

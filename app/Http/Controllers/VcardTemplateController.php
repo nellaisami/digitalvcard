@@ -38,6 +38,7 @@ class VcardTemplateController extends Controller
     {
         $data = $request->validated();
         $data['image_path'] = $photos->store($request->file('image'));
+        $data['image_url'] = 'storage/'.$data['image_path'];
         unset($data['image']);
         VcardTemplate::create($data);
 
@@ -59,6 +60,7 @@ class VcardTemplateController extends Controller
         $oldPath = $vcard_template->image_path;
         if ($request->hasFile('image')) {
             $data['image_path'] = $photos->store($request->file('image'));
+            $data['image_url'] = 'storage/'.$data['image_path'];
         }
 
         DB::transaction(fn () => $vcard_template->update($data));

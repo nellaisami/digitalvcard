@@ -58,6 +58,261 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    document.querySelectorAll('form[data-client-validation]').forEach(function (form) {
+        const mode = form.dataset.clientValidation;
+        const fields = mode === 'login'
+            ? ['email', 'password']
+            : mode === 'otp' ? ['code']
+                : mode === 'admin' ? ['name', 'email', 'password', 'password_confirmation']
+                    : mode === 'account' ? ['name', 'username', 'email']
+                        : mode === 'password-change' ? ['current_password', 'password', 'password_confirmation'] : [];
+        const editing = form.dataset.validationEditing === 'true';
+
+        function validateField(name) {
+            const input = form.elements.namedItem(name);
+            const message = form.querySelector('[data-validation-message="' + name + '"]');
+            if (!input || !message) return true;
+
+            const value = mode === 'password-change' ? input.value : input.value.trim();
+            let error = '';
+
+            if (mode === 'password-change' && name === 'current_password' && !value) {
+                error = 'Please enter your current password.';
+            } else if (mode === 'password-change' && name === 'password') {
+                if (!value) error = 'Please enter a new password.';
+                else if (value.length < 8 || !/[a-z]/.test(value) || !/[A-Z]/.test(value) ||
+                    !/[0-9]/.test(value) || !/[^A-Za-z0-9]/.test(value)) {
+                    error = 'Use at least 8 characters with an uppercase and lowercase letter, a number, and a special character.';
+                }
+            } else if (mode === 'password-change' && name === 'password_confirmation') {
+                const password = form.elements.namedItem('password').value;
+                if (!value) error = 'Please confirm your new password.';
+                else if (value !== password) error = 'The passwords do not match.';
+            } else if (mode === 'login' && name === 'email') {
+                if (!value) error = 'Please enter your email address.';
+                else if (input.validity.typeMismatch || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    error = 'Please enter a valid email address.';
+                }
+            } else if (mode === 'login' && name === 'password' && !input.value.trim()) {
+                error = 'Please enter your password.';
+            } else if (mode === 'account' && name === 'name') {
+                if (!value) error = 'Please enter your full name.';
+                else if (value.length > 255) error = 'Your full name must be 255 characters or fewer.';
+            } else if (mode === 'account' && name === 'username') {
+                if (!value) error = 'Please enter a username.';
+                else if (value.length > 50) error = 'Your username must be 50 characters or fewer.';
+            } else if (mode === 'account' && name === 'email') {
+                if (!value) error = 'Please enter an email address.';
+                else if (input.validity.typeMismatch || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    error = 'Please enter a valid email address.';
+                } else if (value.length > 255) error = 'Your email address must be 255 characters or fewer.';
+            } else if (mode === 'admin' && name === 'name' && !value) {
+                error = 'Please enter the admin’s full name.';
+            } else if (mode === 'admin' && name === 'email') {
+                if (!value) error = 'Please enter an email address.';
+                else if (input.validity.typeMismatch || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+                    error = 'Please enter a valid email address.';
+                }
+            } else if (mode === 'admin' && name === 'password') {
+                if (!value && !editing) error = 'Please enter a password.';
+                else if (value && (value.length < 8 || !/[0-9]/.test(value) || !/[^A-Za-z0-9]/.test(value))) {
+                    error = 'Use at least 8 characters, including a number and a special character.';
+                }
+            } else if (mode === 'admin' && name === 'password_confirmation') {
+                const password = form.elements.namedItem('password').value;
+                if ((!editing || password) && !value) error = 'Please confirm the password.';
+                else if (value !== password) error = 'The passwords do not match.';
+            } else if (mode === 'otp' && name === 'code' && !/^\d{6}$/.test(value)) {
+                error = 'Please enter the 6-digit verification code.';
+            }
+
+            message.textContent = error;
+            input.setAttribute('aria-invalid', error ? 'true' : 'false');
+            input.setAttribute('aria-describedby', message.id || (message.id = 'validation-' + name));
+            input.classList.toggle('is-invalid', Boolean(error));
+            const wrap = input.closest('.input-wrap');
+            if (wrap) wrap.classList.toggle('is-invalid', Boolean(error));
+            return !error;
+        }
+
+        fields.forEach(function (name) {
+            const input = form.elements.namedItem(name);
+            if (!input) return;
+            input.addEventListener('blur', function () { validateField(name); });
+            input.addEventListener('input', function () {
+                if (input.getAttribute('aria-invalid') === 'true') validateField(name);
+                if (mode === 'admin' && name === 'password' &&
+                    form.elements.namedItem('password_confirmation').getAttribute('aria-invalid') === 'true') {
+                    validateField('password_confirmation');
+                }
+                if (mode === 'password-change' && name === 'password') {
+                    const confirmation = form.elements.namedItem('password_confirmation');
+                    if (confirmation.value || confirmation.getAttribute('aria-invalid') === 'true') {
+                        validateField('password_confirmation');
+                    }
+                }
+            });
+        });
+
+        form.addEventListener('submit', function (event) {
+            const valid = fields.map(validateField).every(Boolean);
+            if (!valid) {
+                event.preventDefault();
+                const firstInvalid = form.querySelector('[aria-invalid="true"]');
+                if (firstInvalid) firstInvalid.focus();
+            }
+        });
+    });
+
+    document.querySelectorAll('form[data-template-validation]').forEach(function (form) {
+        const editing = form.dataset.validationEditing === 'true';
+        const nameInput = form.elements.namedItem('name');
+        const descriptionInput = form.elements.namedItem('description');
+        const statusInput = form.elements.namedItem('status');
+        const imageInput = form.elements.namedItem('image');
+        const submitButton = form.querySelector('button[type="submit"]');
+
+        function setError(input, name, error) {
+            const message = form.querySelector('[data-validation-message="' + name + '"]');
+            if (!input || !message) return;
+
+            message.textContent = error;
+            input.classList.toggle('is-invalid', Boolean(error));
+            input.setAttribute('aria-invalid', error ? 'true' : 'false');
+            input.setAttribute('aria-describedby', message.id);
+
+            if (name === 'image') {
+                const editor = input.closest('.template-image-editor');
+                if (editor) editor.classList.toggle('is-invalid', Boolean(error));
+            }
+        }
+
+        function validateField(input, name) {
+            if (!input) return true;
+
+            const value = input.value.trim();
+            let error = '';
+
+            if (name === 'name' && !value) {
+                error = 'Please enter a template name.';
+            } else if (name === 'name' && value.length > 255) {
+                error = 'The template name must be 255 characters or fewer.';
+            } else if (name === 'description' && input.value.length > 2000) {
+                error = 'The description must be 2000 characters or fewer.';
+            } else if (name === 'status' && !['active', 'inactive'].includes(value)) {
+                error = 'Please select a valid status.';
+            }
+
+            setError(input, name, error);
+            return !error;
+        }
+
+        function validateImageFile() {
+            const file = imageInput.files && imageInput.files[0];
+            let error = '';
+
+            if (!file && !editing) {
+                error = 'Please choose a template image.';
+            } else if (file) {
+                const extension = file.name.split('.').pop().toLowerCase();
+                const validTypes = {
+                    jpg: ['jpg', 'jpeg'],
+                    jpeg: ['jpg', 'jpeg'],
+                    png: ['png'],
+                    webp: ['webp']
+                };
+                const validExtensions = validTypes[file.type.toLowerCase().replace('image/', '')];
+
+                if (!validExtensions || !validExtensions.includes(extension)) {
+                    error = 'Choose a JPG, JPEG, PNG, or WebP image.';
+                } else if (file.size > 2 * 1024 * 1024) {
+                    error = 'The image must be 2 MB or smaller.';
+                }
+            }
+
+            setError(imageInput, 'image', error);
+            return { file: file, error: error };
+        }
+
+        function validateImageDimensions(file) {
+            return new Promise(function (resolve) {
+                const image = new Image();
+                const objectUrl = URL.createObjectURL(file);
+
+                image.onload = function () {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve(image.naturalWidth > 0 && image.naturalHeight > 0 &&
+                        image.naturalWidth <= 8192 && image.naturalHeight <= 8192
+                        ? ''
+                        : 'Image dimensions must be between 1 × 1 and 8192 × 8192 pixels.');
+                };
+                image.onerror = function () {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve('The selected file is not a valid image.');
+                };
+                image.src = objectUrl;
+            });
+        }
+
+        [nameInput, descriptionInput].forEach(function (input) {
+            if (!input) return;
+            input.addEventListener('blur', function () { validateField(input, input.name); });
+            input.addEventListener('input', function () {
+                if (input.getAttribute('aria-invalid') === 'true') validateField(input, input.name);
+            });
+        });
+
+        if (statusInput) {
+            statusInput.addEventListener('change', function () { validateField(statusInput, 'status'); });
+        }
+        if (imageInput) {
+            imageInput.addEventListener('change', async function () {
+                const result = validateImageFile();
+                if (result.file && !result.error) {
+                    const error = await validateImageDimensions(result.file);
+                    if (imageInput.files && imageInput.files[0] === result.file) {
+                        setError(imageInput, 'image', error);
+                    }
+                }
+            });
+        }
+
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            if (form.dataset.validating === 'true') return;
+            form.dataset.validating = 'true';
+            if (submitButton) submitButton.disabled = true;
+
+            const validFields = [
+                validateField(nameInput, 'name'),
+                validateField(descriptionInput, 'description'),
+                validateField(statusInput, 'status')
+            ].every(Boolean);
+            const imageResult = validateImageFile();
+            let imageError = imageResult.error;
+
+            if (!imageError && imageResult.file) {
+                imageError = await validateImageDimensions(imageResult.file);
+                setError(imageInput, 'image', imageError);
+            }
+
+            if (validFields && !imageError) {
+                form.submit();
+                return;
+            }
+
+            form.dataset.validating = 'false';
+            if (submitButton) submitButton.disabled = false;
+            const firstInvalid = form.querySelector('.is-invalid');
+            if (firstInvalid === imageInput) {
+                const uploadButton = form.querySelector('.photo-upload-button');
+                if (uploadButton) uploadButton.focus();
+            } else if (firstInvalid) {
+                firstInvalid.focus();
+            }
+        });
+    });
+
     document.querySelectorAll('[data-dismiss]').forEach(function (button) {
         button.addEventListener('click', function () { button.closest('.alert').remove(); });
     });

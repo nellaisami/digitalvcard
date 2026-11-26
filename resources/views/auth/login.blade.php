@@ -4,10 +4,12 @@
 <span class="auth-eyebrow">WELCOME BACK</span><h2>Sign in to your account</h2><p class="auth-intro">Enter your details below to access your workspace.</p>
 @if(session('status'))<div class="alert alert-success"><i class="fa-solid fa-circle-check"></i>{{ session('status') }}</div>@endif
 @if($errors->any())<div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i>{{ $errors->first() }}</div>@endif
-<form method="POST" action="{{ route('login.store') }}" class="auth-form">@csrf
+<form method="POST" action="{{ route('login.store') }}" class="auth-form" data-client-validation="login" novalidate>@csrf
     <label for="email">Email address</label><div class="input-wrap"><i class="fa-regular fa-envelope"></i><input id="email" name="email" type="email" value="{{ old('email') }}" placeholder="you@company.com" autocomplete="email" required autofocus></div>
+    <p class="field-validation-error" data-validation-message="email" aria-live="polite"></p>
     <div class="label-row"><label for="password">Password</label><a href="{{ route('password.request') }}">Forgot password?</a></div>
     <div class="input-wrap"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required><button type="button" class="password-toggle" data-password-toggle aria-label="Show password"><i class="fa-regular fa-eye"></i></button></div>
+    <p class="field-validation-error" data-validation-message="password" aria-live="polite"></p>
     <label class="check-row"><input type="checkbox" name="remember" value="1"><span class="checkmark"></span>Remember me <span class="muted">(30 days)</span></label>
     <button class="button button-primary button-full" type="submit">Continue <i class="fa-solid fa-arrow-right"></i></button>
 </form>

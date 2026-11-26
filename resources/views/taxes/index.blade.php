@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Tax Settings')
 @section('breadcrumb')
-<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i>Tax settings
+<a href="{{ route('plans.index') }}">Plans</a><i class="fa-solid fa-chevron-right"></i><span>Tax settings</span>
 @endsection
 @section('heading', 'Tax settings')
 @section('subheading', 'Configure tax rates applied to current plan price estimates.')

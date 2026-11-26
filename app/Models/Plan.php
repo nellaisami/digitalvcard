@@ -35,6 +35,11 @@ class Plan extends Model
         return $this->hasMany(User::class);
     }
 
+    public function organizations(): HasMany
+    {
+        return $this->hasMany(Organization::class);
+    }
+
     public function vcardTemplates(): BelongsToMany
     {
         return $this->belongsToMany(VcardTemplate::class, 'plan_vcard_template')->withTimestamps();

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SaveUserRequest;
 use App\Models\Plan;
 use App\Models\User;
+use App\Notifications\AdminEmailVerificationNotification;
 use App\Services\ProfilePhotoManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -47,8 +48,20 @@ class AdminController extends Controller
         $data['role'] = 'admin';
         $user = User::create($data);
         $photos->sync($user, $request->file('profile_photo'), $request->boolean('remove_photo'));
+        $user->notify(new AdminEmailVerificationNotification);
 
-        return redirect()->route('admin.index')->with('status', 'Admin account created.');
+        return redirect()->route('admin.index')->with('status', "Admin account created. A verification email has been sent to {$user->email}.");
+    }
+
+    public function verifyEmail(User $user, string $hash): RedirectResponse
+    {
+        abort_unless($user->role === 'admin' && hash_equals(sha1($user->email), $hash), 403);
+
+        if ($user->email_verified_at === null) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
+
+        return redirect()->route('login')->with('status', 'Email address verified. You can now sign in.');
     }
 
     public function show(User $user): View

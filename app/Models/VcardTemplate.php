@@ -4,11 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Facades\Storage;
 
 class VcardTemplate extends Model
 {
-    protected $fillable = ['name', 'description', 'image_path', 'status'];
+    protected $fillable = ['name', 'description', 'image_path', 'image_url', 'status'];
 
     public function plans(): BelongsToMany
     {
@@ -17,8 +16,12 @@ class VcardTemplate extends Model
 
     public function getImageUrlAttribute(): string
     {
-        return $this->image_path
-            ? Storage::disk('public')->url($this->image_path)
-            : asset('images/default-vcard-template.svg');
+        if (! $this->image_path) {
+            return asset('images/default-vcard-template.svg');
+        }
+
+        $imageUrl = $this->attributes['image_url'] ?? 'storage/'.$this->image_path;
+
+        return asset(ltrim($imageUrl, '/'));
     }
 }
