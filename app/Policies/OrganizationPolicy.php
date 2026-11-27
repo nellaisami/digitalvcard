@@ -17,7 +17,8 @@ class OrganizationPolicy
         return $user->role === 'superadmin'
             || ($user instanceof User
                 && $organization->status === 'active'
-                && ($this->hasActiveRole($user, $organization, 'manager')
+                && ($this->hasManagementRole($user, $organization)
+                    || ($user->role === 'admin' && $this->hasActiveMembership($user, $organization))
                     || ($organization->owner_user_id === $user->id
                         && $this->hasActiveRole($user, $organization, 'owner'))));
     }
@@ -37,9 +38,19 @@ class OrganizationPolicy
         return $user->role === 'superadmin'
             || ($user instanceof User
                 && $organization->status === 'active'
-                && ($this->hasActiveRole($user, $organization, 'manager')
+                && ($this->hasManagementRole($user, $organization)
                     || ($organization->owner_user_id === $user->id
                         && $this->hasActiveRole($user, $organization, 'owner'))));
+    }
+
+    public function updateLogo(object $user, Organization $organization): bool
+    {
+        return $this->canManageOrganizationSettings($user, $organization);
+    }
+
+    public function updateTemplate(object $user, Organization $organization): bool
+    {
+        return $this->canManageOrganizationSettings($user, $organization);
     }
 
     public function delete(object $user, Organization $organization): bool
@@ -54,5 +65,27 @@ class OrganizationPolicy
             ->wherePivot('role', $role)
             ->wherePivot('status', 'active')
             ->exists();
+    }
+
+    private function hasManagementRole(User $user, Organization $organization): bool
+    {
+        return $this->hasActiveRole($user, $organization, 'manager');
+    }
+
+    private function hasActiveMembership(User $user, Organization $organization): bool
+    {
+        return $organization->users()
+            ->where('users.id', $user->id)
+            ->wherePivot('status', 'active')
+            ->exists();
+    }
+
+    private function canManageOrganizationSettings(object $user, Organization $organization): bool
+    {
+        return $user instanceof User
+            && $organization->status === 'active'
+            && (($user->role === 'admin' && $this->hasActiveMembership($user, $organization))
+                || ($organization->owner_user_id === $user->id
+                    && $this->hasActiveRole($user, $organization, 'owner')));
     }
 }

@@ -18,7 +18,7 @@ class PlanController extends Controller
     public function index(Request $request): View
     {
         $plans = Plan::query()
-            ->withCount('users')
+            ->withCount('organizations')
             ->withCount('vcardTemplates')
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = $request->string('search');
@@ -65,7 +65,7 @@ class PlanController extends Controller
 
     public function show(Plan $plan, PlanTaxCalculator $calculator): View
     {
-        $plan->loadCount('users')->load('vcardTemplates');
+        $plan->loadCount('organizations')->load('vcardTemplates');
 
         return view('plans.show', [
             'plan' => $plan,
@@ -153,7 +153,7 @@ class PlanController extends Controller
     {
         $assigned = DB::transaction(function () use ($plan): bool {
             $lockedPlan = Plan::query()->lockForUpdate()->findOrFail($plan->id);
-            if ($lockedPlan->users()->exists() || $lockedPlan->organizations()->exists()) {
+            if ($lockedPlan->organizations()->exists()) {
                 return true;
             }
 
@@ -163,7 +163,7 @@ class PlanController extends Controller
         });
 
         if ($assigned) {
-            return back()->with('error', 'This plan is assigned to users or organizations. Reassign them before deleting it.');
+            return back()->with('error', 'This plan is assigned to organizations. Reassign them before deleting it.');
         }
 
         return redirect()->route('plans.index')->with('status', 'Plan deleted successfully.');

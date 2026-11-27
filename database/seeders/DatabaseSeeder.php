@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use App\Models\Organization;
 use App\Models\Plan;
 use App\Models\SuperAdmin;
+use App\Models\User;
 use App\Models\Vcard;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -63,7 +63,7 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        User::whereIn('email', ['admin@example.com', 'manager@example.com'])->update(['plan_id' => Plan::where('name', 'Growth')->value('id')]);
+        $organizations->first()->update(['plan_id' => Plan::where('name', 'Growth')->value('id')]);
 
         foreach (range(1, 24) as $index) {
             $user = User::query()->inRandomOrder()->first();

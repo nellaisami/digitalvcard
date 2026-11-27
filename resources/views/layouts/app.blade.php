@@ -32,7 +32,7 @@
                 <a class="nav-link {{ request()->routeIs('plans.*', 'taxes.*') ? 'active' : '' }}" href="{{ route('plans.index') }}"><i class="fa-solid fa-layer-group"></i><span>Plans</span></a>
                 <a class="nav-link {{ request()->routeIs('vcard-templates.*') ? 'active' : '' }}" href="{{ route('vcard-templates.index') }}"><i class="fa-regular fa-images"></i><span>vCard Templates</span></a>
                 <a class="nav-link {{ request()->routeIs('organizations.*') ? 'active' : '' }}" href="{{ route('organizations.index') }}"><i class="fa-regular fa-building"></i><span>Organizations</span></a>
-            @elseif(auth()->user()->ownedOrganizations()->exists() || auth()->user()->organizations()->wherePivot('role', 'manager')->wherePivot('status', 'active')->where('organizations.status', 'active')->exists())
+            @elseif(auth()->user()->ownedOrganizations()->exists() || auth()->user()->organizations()->wherePivotIn('role', ['manager'])->wherePivot('status', 'active')->where('organizations.status', 'active')->exists() || (auth()->user()->role === 'admin' && auth()->user()->organizations()->wherePivot('status', 'active')->where('organizations.status', 'active')->exists()))
                 <a class="nav-link {{ request()->routeIs('organizations.mine', 'organizations.show') ? 'active' : '' }}" href="{{ route('organizations.mine') }}"><i class="fa-regular fa-building"></i><span>My Organization</span></a>
             @endif
             <a class="nav-link {{ request()->routeIs('vcards.*') ? 'active' : '' }}" href="{{ route('vcards.index') }}"><i class="fa-regular fa-address-card"></i><span>vCards</span></a>

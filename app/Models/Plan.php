@@ -30,11 +30,6 @@ class Plan extends Model
         ];
     }
 
-    public function users(): HasMany
-    {
-        return $this->hasMany(User::class);
-    }
-
     public function organizations(): HasMany
     {
         return $this->hasMany(Organization::class);

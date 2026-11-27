@@ -61,6 +61,7 @@ Route::middleware(['auth:superadmin,web', EnsureEmailIsVerified::class])->group(
         Route::resource('taxes', TaxController::class)->except(['show']);
         Route::patch('/vcard-templates/{vcard_template}/status', [VcardTemplateController::class, 'toggleStatus'])->name('vcard-templates.status');
         Route::resource('vcard-templates', VcardTemplateController::class)->except(['show']);
+        Route::get('/vcard-templates/{vcard_template}/preview', [VcardTemplateController::class, 'preview'])->name('vcard-templates.preview');
         Route::patch('/organizations/{organization}/status', [OrganizationController::class, 'toggleStatus'])->name('organizations.status');
         Route::post('/organizations/{organization}/verification/resend', [OrganizationController::class, 'resendVerification'])->name('organizations.verification.resend');
         Route::patch('/organizations/{organization}/owner/password', [OrganizationController::class, 'updateOwnerPassword'])->name('organizations.owner.password');
@@ -68,6 +69,8 @@ Route::middleware(['auth:superadmin,web', EnsureEmailIsVerified::class])->group(
     });
 
     Route::get('/organizations/my-organization', [OrganizationController::class, 'mine'])->name('organizations.mine');
+    Route::patch('/organizations/{organization}/logo', [OrganizationController::class, 'updateLogo'])->name('organizations.logo');
+    Route::patch('/organizations/{organization}/template', [OrganizationController::class, 'updateTemplate'])->name('organizations.template');
     Route::get('/organizations/{organization}/users/create', [OrganizationController::class, 'createUser'])->name('organizations.users.create');
     Route::post('/organizations/{organization}/users', [OrganizationController::class, 'storeUser'])->name('organizations.users.store');
     Route::get('/organizations/{organization}/users/{member}/edit', [OrganizationController::class, 'editUser'])->name('organizations.users.edit');

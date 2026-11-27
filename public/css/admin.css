@@ -1322,6 +1322,74 @@ tbody tr:hover {
     max-width: 900px
 }
 
+.template-editor-form {
+    max-width: none
+}
+
+.template-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    align-items: start;
+    gap: 24px
+}
+
+.template-editor-main {
+    min-width: 0
+}
+
+.template-editor-main .form-section-title {
+    margin-bottom: 18px
+}
+
+.template-editor-preview {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    height: calc(100vh - 220px);
+    min-height: 620px;
+    max-height: 900px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface)
+}
+
+.template-editor-preview label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text)
+}
+
+.template-editor-preview iframe {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #fff
+}
+
+.template-editor-preview small {
+    font-size: 9px;
+    color: var(--muted)
+}
+
+.template-editor-main .CodeMirror {
+    height: min(65vh, 720px);
+    min-height: 500px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font: 12px/1.5 Consolas, Monaco, monospace
+}
+
+.template-editor-main .CodeMirror.is-invalid {
+    border-color: #dc6376;
+    box-shadow: 0 0 0 3px rgba(220, 99, 118, 0.12)
+}
+
 .form-section-title {
     display: flex;
     align-items: center;
@@ -1985,6 +2053,21 @@ html[data-theme=dark] .tone-blue {
 }
 
 @media(max-width:900px) {
+    .template-editor-layout {
+        grid-template-columns: minmax(0, 1fr)
+    }
+
+    .template-editor-preview {
+        position: static;
+        height: 70vh;
+        min-height: 480px
+    }
+
+    .template-editor-main .CodeMirror {
+        height: 60vh;
+        min-height: 420px
+    }
+
     .sidebar {
         transform: translateX(-100%);
         transition: transform .22s ease

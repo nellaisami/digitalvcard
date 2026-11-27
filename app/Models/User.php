@@ -19,7 +19,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'username', 'email', 'password', 'contact_no', 'address', 'city',
         'country', 'postal_code', 'role', 'status', 'email_verified_at',
-        'profile_photo', 'plan_id',
+        'profile_photo', 'vcard_template_id',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -27,11 +27,6 @@ class User extends Authenticatable
     public function loginOtp(): HasOne
     {
         return $this->hasOne(LoginOtp::class);
-    }
-
-    public function plan(): BelongsTo
-    {
-        return $this->belongsTo(Plan::class);
     }
 
     public function organizations(): BelongsToMany
@@ -49,6 +44,11 @@ class User extends Authenticatable
     public function vcards(): HasMany
     {
         return $this->hasMany(Vcard::class);
+    }
+
+    public function vcardTemplate(): BelongsTo
+    {
+        return $this->belongsTo(VcardTemplate::class);
     }
 
     public function getProfilePhotoUrlAttribute(): string

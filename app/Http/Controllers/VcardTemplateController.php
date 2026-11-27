@@ -16,12 +16,11 @@ class VcardTemplateController extends Controller
     public function index(Request $request): View
     {
         $templates = VcardTemplate::query()
-            ->withCount('plans')
+            ->withCount(['plans', 'users'])
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = $request->string('search');
                 $query->where('name', 'like', "%{$search}%");
             })
-            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -31,7 +30,13 @@ class VcardTemplateController extends Controller
 
     public function create(): View
     {
-        return view('vcard-templates.form', ['template' => new VcardTemplate(['status' => 'active'])]);
+        return view('vcard-templates.form', [
+            'template' => new VcardTemplate([
+                'status' => 'active',
+                'html_code' => '<!doctype html>'."\n".'<html><head><meta charset="utf-8"><title>My vCard</title></head><body><main><h1>Your name</h1><p>Your contact details</p></main></body></html>',
+            ]),
+            'usedCount' => 0,
+        ]);
     }
 
     public function store(SaveVcardTemplateRequest $request, VcardTemplatePhotoManager $photos): RedirectResponse
@@ -47,7 +52,17 @@ class VcardTemplateController extends Controller
 
     public function edit(VcardTemplate $vcard_template): View
     {
-        return view('vcard-templates.form', ['template' => $vcard_template]);
+        $vcard_template->loadCount('users');
+
+        return view('vcard-templates.form', [
+            'template' => $vcard_template,
+            'usedCount' => $vcard_template->users_count,
+        ]);
+    }
+
+    public function preview(VcardTemplate $vcard_template): View
+    {
+        return view('vcard-templates.preview', ['template' => $vcard_template]);
     }
 
     public function update(

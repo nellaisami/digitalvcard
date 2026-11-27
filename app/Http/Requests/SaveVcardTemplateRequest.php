@@ -20,7 +20,8 @@ class SaveVcardTemplateRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255', Rule::unique('vcard_templates', 'name')->ignore($template)],
-            'description' => ['nullable', 'string', 'max:2000'],
+            'price' => ['required', 'decimal:0,2', 'min:0', 'max:99999999.99'],
+            'html_code' => ['required', 'string', 'max:500000'],
             'image' => [
                 $template ? 'nullable' : 'required',
                 'image',

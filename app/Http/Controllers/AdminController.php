@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SaveUserRequest;
-use App\Models\Plan;
 use App\Models\User;
 use App\Notifications\AdminEmailVerificationNotification;
+use App\Services\OrganizationMembershipManager;
 use App\Services\ProfilePhotoManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class AdminController extends Controller
@@ -32,21 +33,30 @@ class AdminController extends Controller
         return view('admins.index', compact('admins'));
     }
 
-    public function create(): View
+    public function create(OrganizationMembershipManager $memberships): View
     {
         return view('users.form', [
             'user' => new User,
-            'plans' => collect(),
             'mode' => 'admin',
+            'organizations' => $memberships->organizationsForUser(new User),
         ]);
     }
 
-    public function store(SaveUserRequest $request, ProfilePhotoManager $photos): RedirectResponse
-    {
+    public function store(
+        SaveUserRequest $request,
+        ProfilePhotoManager $photos,
+        OrganizationMembershipManager $memberships,
+    ): RedirectResponse {
         $data = $request->validated();
-        unset($data['profile_photo'], $data['remove_photo'], $data['plan_id']);
+        $organizationAssignments = $data['organization_assignments'] ?? [];
+        unset($data['profile_photo'], $data['remove_photo'], $data['organization_assignments']);
         $data['role'] = 'admin';
-        $user = User::create($data);
+        $user = DB::transaction(function () use ($data, $organizationAssignments, $memberships): User {
+            $user = User::create($data);
+            $memberships->sync($user, $organizationAssignments);
+
+            return $user;
+        });
         $photos->sync($user, $request->file('profile_photo'), $request->boolean('remove_photo'));
         $user->notify(new AdminEmailVerificationNotification);
 
@@ -67,34 +77,41 @@ class AdminController extends Controller
     public function show(User $user): View
     {
         abort_unless($user->role === 'admin', 404);
-        $user->load('plan');
 
         return view('users.show', ['user' => $user, 'mode' => 'admin']);
     }
 
-    public function edit(User $user): View
+    public function edit(User $user, OrganizationMembershipManager $memberships): View
     {
         abort_unless($user->role === 'admin', 404);
 
         return view('users.form', [
             'user' => $user,
-            'plans' => collect(),
             'mode' => 'admin',
+            'organizations' => $memberships->organizationsForUser($user),
         ]);
     }
 
-    public function update(SaveUserRequest $request, User $user, ProfilePhotoManager $photos): RedirectResponse
-    {
+    public function update(
+        SaveUserRequest $request,
+        User $user,
+        ProfilePhotoManager $photos,
+        OrganizationMembershipManager $memberships,
+    ): RedirectResponse {
         abort_unless($user->role === 'admin', 404);
         $data = $request->validated();
-        unset($data['profile_photo'], $data['remove_photo'], $data['plan_id']);
+        $organizationAssignments = $data['organization_assignments'] ?? [];
+        unset($data['profile_photo'], $data['remove_photo'], $data['organization_assignments']);
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
         if ($user->email !== $data['email']) {
             $data['email_verified_at'] = null;
         }
-        $user->update($data);
+        DB::transaction(function () use ($user, $data, $organizationAssignments, $memberships): void {
+            $user->update($data);
+            $memberships->sync($user, $organizationAssignments);
+        });
         $photos->sync($user, $request->file('profile_photo'), $request->boolean('remove_photo'));
 
         return redirect()->route('admin.index')->with('status', 'Admin account updated.');
@@ -122,6 +139,9 @@ class AdminController extends Controller
         abort_unless($user->role === 'admin', 404);
         if ($request->user()->is($user)) {
             return back()->withErrors(['admin' => 'You cannot delete the account you are currently using.']);
+        }
+        if ($user->ownedOrganizations()->exists()) {
+            return back()->withErrors(['admin' => 'Delete or transfer this user’s organization ownership before deleting the account.']);
         }
 
         $photo = $user->profile_photo;

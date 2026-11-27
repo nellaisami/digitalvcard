@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Organization;
 use App\Models\Plan;
 use App\Models\SuperAdmin;
 use App\Models\Tax;
@@ -118,10 +119,11 @@ class PlanManagementTest extends TestCase
         ])->assertRedirect('/plans/'.$growth->id);
         $this->assertDatabaseHas('plans', ['id' => $growth->id, 'name' => 'Growth Plus', 'price' => '125.25']);
 
-        $user = User::factory()->create(['plan_id' => $starter->id]);
+        $organization = Organization::create(['name' => 'Northwind Studio', 'plan_id' => $starter->id]);
         $this->delete('/plans/'.$starter->id)->assertRedirect();
         $this->assertDatabaseHas('plans', ['id' => $starter->id]);
-        $this->assertSame($starter->id, $user->fresh()->plan_id);
+        $this->assertSame($starter->id, $organization->fresh()->plan_id);
+        $organization->update(['plan_id' => null]);
         $this->delete('/plans/'.$growth->id)->assertRedirect('/plans');
         $this->assertDatabaseMissing('plans', ['id' => $growth->id]);
         $templateTwo->delete();
@@ -213,7 +215,7 @@ class PlanManagementTest extends TestCase
         $this->assertDatabaseMissing('taxes', ['id' => $inactive->id]);
     }
 
-    public function test_plan_search_pagination_and_user_plan_display_include_frequency_and_price(): void
+    public function test_plan_search_pagination_and_organization_assignments_are_displayed(): void
     {
         $superadmin = SuperAdmin::factory()->create();
         $plan = Plan::create([
@@ -226,7 +228,7 @@ class PlanManagementTest extends TestCase
             'is_default' => false,
             'status' => 'active',
         ]);
-        User::factory()->create(['plan_id' => $plan->id]);
+        Organization::create(['name' => 'Quarterly Team', 'plan_id' => $plan->id]);
         foreach (range(1, 11) as $index) {
             Plan::create([
                 'name' => 'Additional plan '.$index,
@@ -246,8 +248,12 @@ class PlanManagementTest extends TestCase
             ->assertSee('Quarterly Team')
             ->assertSee('45.00');
         $this->get('/plans?page=2')->assertOk()->assertSee('Showing 11–12 of 12 plans');
-        $this->get('/users?plan_id='.$plan->id)->assertOk()
-            ->assertSee('Quarterly Team')
-            ->assertSee('Yearly');
+        $this->get('/plans/'.$plan->id)->assertOk()
+            ->assertSee('Assigned organizations')
+            ->assertSee('Yearly')
+            ->assertSee('45.00')
+            ->assertSee('>1</dd>', false);
+        $this->get('/organizations?plan_id='.$plan->id)->assertOk()
+            ->assertSee('Quarterly Team');
     }
 }

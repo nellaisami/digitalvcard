@@ -21,7 +21,13 @@
     </div>
 
     <div class="form-divider"></div>
-    <div class="form-section-title"><span class="form-section-icon form-icon-purple"><i class="fa-solid fa-user-tie"></i></span><div><h2>Organization owner</h2><p>Owner credentials use the existing user account system</p></div></div>
+    <div class="form-section-title"><span class="form-section-icon form-icon-purple"><i class="fa-solid fa-user-tie"></i></span><div><h2>Organization owner</h2><p>
+        @if($needsOwner)
+            New owner accounts receive the global Platform Admin role.
+        @else
+            The owner keeps the organization Owner membership; <a href="{{ route('users.role.edit', $owner) }}">manage their global role</a> separately.
+        @endif
+    </p></div></div>
     <div class="form-grid grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="form-field"><label for="owner_first_name">First name <span>*</span></label><input id="owner_first_name" name="owner_first_name" value="{{ old('owner_first_name', $ownerFirstName) }}" maxlength="100" required>@error('owner_first_name')<small class="field-error">{{ $message }}</small>@enderror</div>
         <div class="form-field"><label for="owner_last_name">Last name <span>*</span></label><input id="owner_last_name" name="owner_last_name" value="{{ old('owner_last_name', $ownerLastName) }}" maxlength="100" required>@error('owner_last_name')<small class="field-error">{{ $message }}</small>@enderror</div>

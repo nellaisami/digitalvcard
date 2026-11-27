@@ -10,9 +10,11 @@ use App\Models\Vcard;
 use App\Notifications\OrganizationMemberEmailVerificationNotification;
 use App\Notifications\OrganizationOwnerEmailVerificationNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
@@ -25,6 +27,9 @@ class OrganizationManagementTest extends TestCase
         Notification::fake();
         $superadmin = SuperAdmin::factory()->create();
         $plan = Plan::create(['name' => 'Growth', 'price' => 25, 'status' => 'active']);
+        $this->actingAs($superadmin, 'superadmin')->get('/organizations/create')
+            ->assertOk()
+            ->assertSee('New owner accounts receive the global Platform Admin role.');
 
         $this->actingAs($superadmin, 'superadmin')->post('/organizations', $this->organizationData([
             'plan_id' => $plan->id,
@@ -33,7 +38,7 @@ class OrganizationManagementTest extends TestCase
         $organization = Organization::where('email', 'contact@northwind.example')->firstOrFail();
         $owner = $organization->owner;
         $this->assertSame('Jordan Lee', $owner->name);
-        $this->assertSame('staff', $owner->role);
+        $this->assertSame('admin', $owner->role);
         $this->assertSame($plan->id, $organization->plan_id);
         $this->assertTrue(Hash::check('owner-password', $owner->password));
         $this->assertNull($owner->email_verified_at);
@@ -64,6 +69,9 @@ class OrganizationManagementTest extends TestCase
         $owner = $organization->owner;
         $oldPassword = $owner->password;
         $owner->forceFill(['email_verified_at' => now()])->save();
+        $this->actingAs($superadmin, 'superadmin')->get('/organizations/'.$organization->id.'/edit')
+            ->assertOk()
+            ->assertSee('manage their global role');
 
         $this->actingAs($superadmin, 'superadmin')->put('/organizations/'.$organization->id, $this->organizationData([
             'name' => 'Northwind Group',
@@ -93,7 +101,7 @@ class OrganizationManagementTest extends TestCase
         $this->assertTrue(Hash::check('new-owner-password', $owner->fresh()->password));
     }
 
-    public function test_owner_can_create_and_verify_a_new_organization_user(): void
+    public function test_owner_can_create_an_organization_manager_who_can_manage_members(): void
     {
         Notification::fake();
         $organization = $this->makeOrganization(null);
@@ -134,6 +142,85 @@ class OrganizationManagementTest extends TestCase
         ]);
         $this->get($verificationUrl)->assertRedirect('/login');
         $this->assertNotNull($member->fresh()->email_verified_at);
+
+        $existingUser = User::factory()->create(['email' => 'added-by-org-admin@example.test']);
+        $this->actingAs($member->fresh())
+            ->get('/organizations/my-organization')
+            ->assertOk()
+            ->assertSee($organization->name);
+        $this->get('/organizations/'.$organization->id.'/users/create')->assertOk();
+        $this->post('/organizations/'.$organization->id.'/users', [
+            'account_type' => 'existing',
+            'email' => $existingUser->email,
+            'organization_role' => 'manager',
+            'status' => 'active',
+        ])->assertRedirect('/organizations/'.$organization->id);
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $organization->id,
+            'user_id' => $existingUser->id,
+            'role' => 'manager',
+        ]);
+        $this->assertSame('staff', $member->fresh()->role);
+    }
+
+    public function test_owner_and_assigned_platform_admin_can_manage_logos_but_managers_cannot(): void
+    {
+        Storage::fake('public');
+        $organization = $this->makeOrganization(null);
+        $owner = $organization->owner;
+        $owner->forceFill(['email_verified_at' => now()])->save();
+        $this->actingAs($owner)->patch('/organizations/'.$organization->id.'/logo', [
+            'logo' => $this->png('owner-logo.png'),
+        ])->assertRedirect('/organizations/'.$organization->id);
+
+        $ownerLogo = $organization->fresh()->logo_path;
+        $this->assertNotNull($ownerLogo);
+        Storage::disk('public')->assertExists($ownerLogo);
+
+        $platformAdmin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+        $organization->users()->attach($platformAdmin, ['role' => 'member', 'status' => 'active']);
+        $this->actingAs($platformAdmin)
+            ->get('/organizations/'.$organization->id)
+            ->assertOk()
+            ->assertSee($organization->name);
+        $this->patch('/organizations/'.$organization->id.'/logo', [
+            'logo' => $this->png('admin-logo.png'),
+        ])->assertRedirect('/organizations/'.$organization->id);
+
+        $adminLogo = $organization->fresh()->logo_path;
+        $this->assertNotSame($ownerLogo, $adminLogo);
+        Storage::disk('public')->assertMissing($ownerLogo);
+        Storage::disk('public')->assertExists($adminLogo);
+
+        $manager = User::factory()->create(['email_verified_at' => now()]);
+        $organization->users()->attach($manager, ['role' => 'manager', 'status' => 'active']);
+        $this->actingAs($manager)->patch('/organizations/'.$organization->id.'/logo', [
+            'logo' => $this->png('manager-logo.png'),
+        ])->assertForbidden();
+
+        $this->actingAs($platformAdmin)->patch('/organizations/'.$organization->id.'/logo', [
+            'remove_logo' => '1',
+        ])->assertRedirect('/organizations/'.$organization->id);
+        $this->assertNull($organization->fresh()->logo_path);
+        Storage::disk('public')->assertMissing($adminLogo);
+    }
+
+    public function test_admin_is_not_a_valid_organization_membership_role(): void
+    {
+        $organization = $this->makeOrganization(null);
+        $owner = $organization->owner;
+        $owner->forceFill(['email_verified_at' => now()])->save();
+
+        $this->actingAs($owner)->post('/organizations/'.$organization->id.'/users', [
+            'account_type' => 'create',
+            'name' => 'Invalid Role',
+            'email' => 'invalid-role@example.test',
+            'password' => 'member-password',
+            'password_confirmation' => 'member-password',
+            'organization_role' => 'admin',
+            'status' => 'active',
+        ])->assertSessionHasErrors('organization_role');
+        $this->assertDatabaseMissing('users', ['email' => 'invalid-role@example.test']);
     }
 
     public function test_owner_can_attach_update_toggle_and_remove_existing_user_without_deleting_account_or_vcard(): void
@@ -162,6 +249,9 @@ class OrganizationManagementTest extends TestCase
             'status' => 'active',
         ]);
 
+        $this->get('/organizations/'.$organization->id.'/users/'.$member->id.'/edit')
+            ->assertOk()
+            ->assertSee('Organization role');
         $this->patch('/organizations/'.$organization->id.'/users/'.$member->id, [
             'organization_role' => 'manager',
             'status' => 'active',
@@ -266,7 +356,7 @@ class OrganizationManagementTest extends TestCase
         $this->assertDatabaseHas('organizations', ['id' => $other->id]);
     }
 
-    public function test_owner_can_only_view_their_active_organization_and_cannot_promote_themselves(): void
+    public function test_owner_can_view_only_their_active_organization_and_superadmin_can_promote_them(): void
     {
         $superadmin = SuperAdmin::factory()->create();
         $organization = $this->makeOrganization(null);
@@ -298,7 +388,8 @@ class OrganizationManagementTest extends TestCase
 
         $this->actingAs($superadmin, 'superadmin')
             ->patch('/users/'.$owner->id.'/role', ['role' => 'admin'])
-            ->assertSessionHasErrors('role');
+            ->assertRedirect('/users');
+        $this->assertSame('admin', $owner->fresh()->role);
         $this->patchJson('/organizations/'.$organization->id.'/status')
             ->assertOk()
             ->assertJson(['status' => 'inactive']);
@@ -437,6 +528,13 @@ class OrganizationManagementTest extends TestCase
             'plan_id' => '',
             'status' => 'active',
         ], $overrides);
+    }
+
+    private function png(string $name): UploadedFile
+    {
+        $content = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/rWQAAAAASUVORK5CYII=', true);
+
+        return UploadedFile::fake()->createWithContent($name, $content)->mimeType('image/png');
     }
 
     private function makeOrganization(?Plan $plan, array $overrides = []): Organization

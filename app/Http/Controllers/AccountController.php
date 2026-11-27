@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SuperAdmin;
+use App\Models\User;
+use App\Models\VcardTemplate;
+use App\Services\ProfilePhotoManager;
+use App\Support\ProfilePhotoRules;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Hash;
-use App\Models\SuperAdmin;
-use App\Services\ProfilePhotoManager;
-use App\Support\ProfilePhotoRules;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
@@ -16,7 +17,20 @@ class AccountController extends Controller
 {
     public function edit(Request $request): View
     {
-        return view('account.edit', ['user' => $request->user()]);
+        $user = $request->user();
+        $templates = $user instanceof User
+            ? VcardTemplate::query()
+                ->where('status', 'active')
+                ->when($user->vcard_template_id, fn ($query) => $query->orWhereKey($user->vcard_template_id))
+                ->orderBy('name')
+                ->get()
+            : collect();
+
+        return view('account.edit', [
+            'user' => $user,
+            'templates' => $templates,
+            'canSelectTemplate' => $user instanceof User,
+        ]);
     }
 
     public function update(Request $request, ProfilePhotoManager $photos): RedirectResponse
@@ -35,14 +49,28 @@ class AccountController extends Controller
             $emailRules[] = Rule::unique('users', 'email')->ignore($user);
             $emailRules[] = Rule::unique('super_admins', 'email');
         }
-        $data = $request->validate([
+        $rules = [
             'name' => ['required', 'string', 'max:255'],
             'username' => $usernameRules,
             'email' => $emailRules,
             'contact_no' => ['nullable', 'string', 'max:30'],
             'profile_photo' => ProfilePhotoRules::rules(),
             'remove_photo' => ['sometimes', 'boolean'],
-        ]);
+            'vcard_template_id' => ['prohibited'],
+        ];
+        if ($user instanceof User) {
+            $rules['vcard_template_id'] = [
+                'nullable',
+                'integer',
+                Rule::exists('vcard_templates', 'id')->where(function ($query) use ($user): void {
+                    $query->where('status', 'active');
+                    if ($user->vcard_template_id) {
+                        $query->orWhere('id', $user->vcard_template_id);
+                    }
+                }),
+            ];
+        }
+        $data = $request->validate($rules);
         unset($data['profile_photo'], $data['remove_photo']);
         if ($user->email !== $data['email']) {
             $data['email_verified_at'] = null;

@@ -19,6 +19,7 @@ class SaveUserRequest extends FormRequest
     {
         $user = $this->route('user') ?? $this->route('admin');
         $adminMode = $this->routeIs('admin.*');
+        $canAssignOrganizations = $adminMode || ! ($user instanceof User) || $user->role === 'staff';
         $passwordRules = [$user ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'];
         if ($adminMode) {
             $passwordRules[] = 'regex:/^(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,}$/';
@@ -40,16 +41,11 @@ class SaveUserRequest extends FormRequest
             'country' => ['nullable', 'string', 'max:100'],
             'postal_code' => ['nullable', 'string', 'max:20'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
-            'plan_id' => $this->routeIs('admin.*') ? ['prohibited'] : [
-                    'nullable',
-                    'integer',
-                    Rule::exists('plans', 'id')->where(function ($query) use ($user): void {
-                        $query->where('status', 'active');
-                        if ($user?->plan_id) {
-                            $query->orWhere('id', $user->plan_id);
-                        }
-                    }),
-                ],
+            'plan_id' => ['prohibited'],
+            'organization_assignments' => $canAssignOrganizations ? ['nullable', 'array'] : ['prohibited'],
+            'organization_assignments.*' => ['required', 'array:id,role'],
+            'organization_assignments.*.id' => ['required', 'integer', 'distinct', Rule::exists('organizations', 'id')],
+            'organization_assignments.*.role' => ['nullable', Rule::in(['member', 'manager'])],
             'profile_photo' => ProfilePhotoRules::rules(),
             'remove_photo' => ['sometimes', 'boolean'],
         ];

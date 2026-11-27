@@ -167,7 +167,9 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('form[data-template-validation]').forEach(function (form) {
         const editing = form.dataset.validationEditing === 'true';
         const nameInput = form.elements.namedItem('name');
-        const descriptionInput = form.elements.namedItem('description');
+        const priceInput = form.elements.namedItem('price');
+        const htmlInput = form.elements.namedItem('html_code');
+        const htmlPreview = form.querySelector('[data-template-html-preview]');
         const statusInput = form.elements.namedItem('status');
         const imageInput = form.elements.namedItem('image');
         const submitButton = form.querySelector('button[type="submit"]');
@@ -178,6 +180,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
             message.textContent = error;
             input.classList.toggle('is-invalid', Boolean(error));
+            if (name === 'html_code') {
+                const editor = form.querySelector('[data-html-code-editor]');
+                if (editor) editor.classList.toggle('is-invalid', Boolean(error));
+            }
             input.setAttribute('aria-invalid', error ? 'true' : 'false');
             input.setAttribute('aria-describedby', message.id);
 
@@ -197,8 +203,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 error = 'Please enter a template name.';
             } else if (name === 'name' && value.length > 255) {
                 error = 'The template name must be 255 characters or fewer.';
-            } else if (name === 'description' && input.value.length > 2000) {
-                error = 'The description must be 2000 characters or fewer.';
+            } else if (name === 'price' && (value === '' || !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 99999999.99)) {
+                error = 'Enter a valid non-negative template price.';
+            } else if (name === 'html_code' && !value) {
+                error = 'Please enter the template HTML code.';
+            } else if (name === 'html_code' && input.value.length > 500000) {
+                error = 'The HTML code must be 500,000 characters or fewer.';
             } else if (name === 'status' && !['active', 'inactive'].includes(value)) {
                 error = 'Please select a valid status.';
             }
@@ -254,11 +264,12 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
-        [nameInput, descriptionInput].forEach(function (input) {
+        [nameInput, priceInput, htmlInput].forEach(function (input) {
             if (!input) return;
             input.addEventListener('blur', function () { validateField(input, input.name); });
             input.addEventListener('input', function () {
                 if (input.getAttribute('aria-invalid') === 'true') validateField(input, input.name);
+                if (input === htmlInput && htmlPreview) htmlPreview.srcdoc = input.value;
             });
         });
 
@@ -285,7 +296,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const validFields = [
                 validateField(nameInput, 'name'),
-                validateField(descriptionInput, 'description'),
+                validateField(priceInput, 'price'),
+                validateField(htmlInput, 'html_code'),
                 validateField(statusInput, 'status')
             ].every(Boolean);
             const imageResult = validateImageFile();
@@ -307,6 +319,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (firstInvalid === imageInput) {
                 const uploadButton = form.querySelector('.photo-upload-button');
                 if (uploadButton) uploadButton.focus();
+            } else if (firstInvalid === htmlInput) {
+                const editor = form.querySelector('[data-html-code-editor]');
+                if (editor && editor.CodeMirror) editor.CodeMirror.focus();
+                else firstInvalid.focus();
             } else if (firstInvalid) {
                 firstInvalid.focus();
             }

@@ -4,6 +4,7 @@
     $adminMode = ($mode ?? 'user') === 'admin';
     $routePrefix = $adminMode ? 'admin' : 'users';
     $entityLabel = $adminMode ? 'admin' : 'user';
+    $canAssignOrganizations = $adminMode || !$editing || $user->role === 'staff';
 @endphp
 @section('title', ($editing ? 'Edit ' : 'Add ').ucfirst($entityLabel))
 @section('breadcrumb')
@@ -29,10 +30,37 @@
         <div class="form-field"><label for="city">City</label><input id="city" name="city" value="{{ old('city', $user->city) }}"></div>
         <div class="form-field"><label for="country">Country</label><input id="country" name="country" value="{{ old('country', $user->country) }}"></div>
         <div class="form-field"><label for="postal_code">Postal code</label><input id="postal_code" name="postal_code" value="{{ old('postal_code', $user->postal_code) }}"></div>
-        @unless($adminMode)
-            <div class="form-field"><label for="plan_id">Assigned plan</label><select id="plan_id" name="plan_id"><option value="">No plan</option>@foreach($plans as $plan)<option value="{{ $plan->id }}" @selected((string) old('plan_id', $user->plan_id) === (string) $plan->id)>{{ $plan->name }} — {{ strtoupper(config('app.currency', 'USD')) }} {{ number_format((float) $plan->price, 2) }} / {{ ucfirst($plan->frequency) }}{{ $plan->status === 'active' ? '' : ' (Inactive — current plan)' }}</option>@endforeach</select>@error('plan_id')<small class="field-error">{{ $message }}</small>@enderror</div>
-        @endunless
     </div>
+    @if($canAssignOrganizations)
+        <div class="form-divider"></div>
+        <div class="form-section-title"><span class="form-section-icon form-icon-purple"><i class="fa-regular fa-building"></i></span><div><h2>Organization access</h2><p>Choose a membership role. These roles apply only within each organization and do not change the account's platform role.</p></div></div>
+        @if($organizations->isEmpty())
+            <p class="plan-muted-copy">Create an organization before assigning this user.</p>
+        @else
+            <div class="form-grid grid grid-cols-1 gap-4 md:grid-cols-2">
+                @foreach($organizations as $index => $organization)
+                    @php($membership = $organization->users->first()?->pivot)
+                    @php($organizationOwner = ($user->id !== null && (int) $user->id === (int) $organization->owner_user_id) || $membership?->role === 'owner')
+                    <div class="form-field">
+                        <input type="hidden" name="organization_assignments[{{ $index }}][id]" value="{{ $organization->id }}">
+                        <label for="organization_role_{{ $organization->id }}">{{ $organization->name }}{{ $organization->status === 'inactive' ? ' (Inactive)' : '' }}</label>
+                        @if($organizationOwner)
+                            <span class="status-badge status-active">Owner</span>
+                        @else
+                            <select id="organization_role_{{ $organization->id }}" name="organization_assignments[{{ $index }}][role]">
+                                @php($selectedOrganizationRole = old('organization_assignments.'.$index.'.role', $membership?->role ?? ''))
+                                <option value="" @selected($selectedOrganizationRole === '')>Not assigned</option>
+                                <option value="member" @selected($selectedOrganizationRole === 'member')>Member</option>
+                                <option value="manager" @selected($selectedOrganizationRole === 'manager')>Manager</option>
+                            </select>
+                        @endif
+                        @error('organization_assignments.'.$index.'.id')<small class="field-error">{{ $message }}</small>@enderror
+                        @error('organization_assignments.'.$index.'.role')<small class="field-error">{{ $message }}</small>@enderror
+                    </div>
+                @endforeach
+            </div>
+        @endif
+    @endif
     <div class="form-divider"></div>
     <div class="form-section-title"><span class="form-section-icon form-icon-purple"><i class="fa-solid fa-shield-halved"></i></span><div><h2>Account access</h2><p>Set account status and sign-in credentials. Role changes are managed separately.</p></div></div>
     <div class="form-grid grid grid-cols-1 gap-4 md:grid-cols-2">

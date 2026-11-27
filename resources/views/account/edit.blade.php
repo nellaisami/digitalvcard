@@ -15,6 +15,19 @@
             <div class="form-field"><label for="username">Username <span>*</span></label><input id="username" name="username" value="{{ old('username', $user->username) }}" maxlength="50" autocomplete="username" required><small class="field-validation-error" data-validation-message="username" aria-live="polite"></small></div>
             <div class="form-field"><label for="email">Email address <span>*</span></label><input id="email" name="email" type="email" value="{{ old('email', $user->email) }}" maxlength="255" required><small class="field-validation-error" data-validation-message="email" aria-live="polite"></small><small class="field-hint">Changing your email signs you out until you verify the new address with an OTP.</small></div>
             <div class="form-field"><label for="contact_no">Contact number</label><input id="contact_no" name="contact_no" value="{{ old('contact_no', $user->contact_no) }}"></div>
+            @if($canSelectTemplate)
+                <div class="form-field">
+                    <label for="vcard_template_id">vCard template</label>
+                    <select id="vcard_template_id" name="vcard_template_id">
+                        <option value="">No template selected</option>
+                        @foreach($templates as $template)
+                            <option value="{{ $template->id }}" @selected((string) old('vcard_template_id', $user->vcard_template_id) === (string) $template->id)>{{ $template->name }} — {{ strtoupper(config('app.currency', 'USD')) }} {{ number_format((float) $template->price, 2) }}</option>
+                        @endforeach
+                    </select>
+                    <small class="field-hint">Prices are informational; template selection does not process a payment.</small>
+                    @error('vcard_template_id')<small class="field-error">{{ $message }}</small>@enderror
+                </div>
+            @endif
         </div>
         <div class="form-actions"><button class="button button-primary" type="submit"><i class="fa-solid fa-check"></i> Save changes</button></div>
     </form>

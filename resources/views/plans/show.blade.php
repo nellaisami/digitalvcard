@@ -20,7 +20,7 @@
             <div><dt>Trial days</dt><dd>{{ $plan->trial_days }}</dd></div>
             <div><dt>Status</dt><dd><span class="status-badge {{ $plan->status === 'active' ? 'status-active' : 'status-inactive' }}">{{ ucfirst($plan->status) }}</span></dd></div>
             <div><dt>Default plan</dt><dd>{{ $plan->is_default ? 'Yes' : 'No' }}</dd></div>
-            <div><dt>Assigned users</dt><dd>{{ $plan->users_count }}</dd></div>
+            <div><dt>Assigned organizations</dt><dd>{{ $plan->organizations_count }}</dd></div>
             <div><dt>Created</dt><dd>{{ $plan->created_at->format('M j, Y') }}</dd></div>
             <div><dt>Updated</dt><dd>{{ $plan->updated_at->format('M j, Y') }}</dd></div>
         </dl>

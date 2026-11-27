@@ -20,7 +20,7 @@
     @if($plans->isEmpty())
         <div class="empty-state"><span><i class="fa-solid fa-layer-group"></i></span><strong>No plans found</strong><p>Create a plan to configure pricing and features.</p><a class="button button-primary button-small" href="{{ route('plans.create') }}">Add new plan</a></div>
     @else
-        <div class="table-scroll"><table><thead><tr><th>ID</th><th>PLAN NAME</th><th>PRICE</th><th>FREQUENCY</th><th>TEMPLATES</th><th>FEATURES</th><th>ASSIGNED USERS</th><th>STATUS</th><th>DEFAULT PLAN</th><th class="actions-heading">ACTIONS</th></tr></thead><tbody>
+        <div class="table-scroll"><table><thead><tr><th>ID</th><th>PLAN NAME</th><th>PRICE</th><th>FREQUENCY</th><th>TEMPLATES</th><th>FEATURES</th><th>ASSIGNED ORGANIZATIONS</th><th>STATUS</th><th>DEFAULT PLAN</th><th class="actions-heading">ACTIONS</th></tr></thead><tbody>
         @foreach($plans as $plan)
             <tr>
                 <td>{{ $plan->id }}</td>
@@ -29,7 +29,7 @@
                 <td>{{ ucfirst($plan->frequency) }}</td>
                 <td>{{ $plan->vcard_templates_count }}</td>
                 <td>{{ count($plan->features ?? []) }} enabled</td>
-                <td>{{ $plan->users_count }}</td>
+                <td>{{ $plan->organizations_count }}</td>
                 <td><div class="status-control"><button type="button" class="toggle-switch" role="switch" aria-checked="{{ $plan->status === 'active' ? 'true' : 'false' }}" aria-label="Toggle {{ $plan->name }} status" data-async-toggle data-toggle-url="{{ route('plans.status', $plan) }}" data-toggle-kind="status"><span></span></button><span class="status-badge {{ $plan->status === 'active' ? 'status-active' : 'status-inactive' }}" data-toggle-label>{{ ucfirst($plan->status) }}</span></div></td>
                 <td>
                     @if($plan->is_default)<span class="status-badge status-active">Default</span>
@@ -38,7 +38,7 @@
                 <td><div class="row-actions">
                     <a class="icon-action" href="{{ route('plans.show', $plan) }}" title="View plan"><i class="fa-regular fa-eye"></i></a>
                     <a class="icon-action" href="{{ route('plans.edit', $plan) }}" title="Edit plan"><i class="fa-regular fa-pen-to-square"></i></a>
-                    <form method="POST" action="{{ route('plans.destroy', $plan) }}" data-confirm="{{ $plan->users_count ? 'This plan is assigned to users. Reassign them before deletion.' : 'Delete plan '.$plan->name.'? This cannot be undone.' }}">@csrf @method('DELETE')<button class="icon-action action-danger" type="submit" title="Delete plan" @disabled($plan->users_count > 0)><i class="fa-regular fa-trash-can"></i></button></form>
+                    <form method="POST" action="{{ route('plans.destroy', $plan) }}" data-confirm="{{ $plan->organizations_count ? 'This plan is assigned to organizations. Reassign them before deletion.' : 'Delete plan '.$plan->name.'? This cannot be undone.' }}">@csrf @method('DELETE')<button class="icon-action action-danger" type="submit" title="Delete plan" @disabled($plan->organizations_count > 0)><i class="fa-regular fa-trash-can"></i></button></form>
                 </div></td>
             </tr>
         @endforeach

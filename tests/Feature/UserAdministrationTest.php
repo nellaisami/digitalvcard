@@ -2,13 +2,14 @@
 
 namespace Tests\Feature;
 
-use App\Models\Plan;
+use App\Models\Organization;
 use App\Models\SuperAdmin;
 use App\Models\User;
 use App\Notifications\AdminEmailVerificationNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
@@ -124,13 +125,94 @@ class UserAdministrationTest extends TestCase
         $this->assertNotNull($admin->fresh()->email_verified_at);
     }
 
-    public function test_user_creation_role_plan_photo_and_verification_are_superadmin_controlled(): void
+    public function test_superadmin_can_assign_platform_admin_accounts_to_organizations(): void
+    {
+        $superadmin = SuperAdmin::factory()->create();
+        $organization = Organization::create(['name' => 'Assigned Organization']);
+
+        $this->actingAs($superadmin, 'superadmin')->get('/admin/create')
+            ->assertOk()
+            ->assertSee('Organization access')
+            ->assertSee('Assigned Organization');
+
+        $this->post('/admin', [
+            'name' => 'Assigned Platform Admin',
+            'email' => 'assigned-admin@example.test',
+            'password' => 'Strong-pass1!',
+            'password_confirmation' => 'Strong-pass1!',
+            'status' => 'active',
+            'organization_assignments' => [
+                ['id' => $organization->id, 'role' => 'member'],
+            ],
+        ])->assertRedirect('/admin');
+
+        $admin = User::where('email', 'assigned-admin@example.test')->firstOrFail();
+        $this->assertSame('admin', $admin->role);
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $organization->id,
+            'user_id' => $admin->id,
+            'role' => 'member',
+            'status' => 'active',
+        ]);
+
+        $this->put('/admin/'.$admin->id, [
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'password' => '',
+            'password_confirmation' => '',
+            'status' => 'active',
+            'organization_assignments' => [
+                ['id' => $organization->id, 'role' => 'manager'],
+            ],
+        ])->assertRedirect('/admin');
+
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $organization->id,
+            'user_id' => $admin->id,
+            'role' => 'manager',
+            'status' => 'active',
+        ]);
+    }
+
+    public function test_admin_owner_account_cannot_be_deleted_without_transferring_ownership(): void
+    {
+        $superadmin = SuperAdmin::factory()->create();
+        $owner = User::factory()->create(['role' => 'admin']);
+        $organization = Organization::create([
+            'name' => 'Owned by Admin',
+            'owner_user_id' => $owner->id,
+        ]);
+        $organization->users()->attach($owner, ['role' => 'owner', 'status' => 'active']);
+
+        $this->actingAs($superadmin, 'superadmin')
+            ->delete('/admin/'.$owner->id)
+            ->assertSessionHasErrors('admin');
+        $this->assertDatabaseHas('users', ['id' => $owner->id]);
+        $this->assertDatabaseHas('organizations', [
+            'id' => $organization->id,
+            'owner_user_id' => $owner->id,
+        ]);
+    }
+
+    public function test_user_creation_role_photo_and_verification_are_superadmin_controlled(): void
     {
         Storage::fake('public');
         $superadmin = SuperAdmin::factory()->create();
-        $starter = Plan::create(['name' => 'Starter', 'price' => 0, 'status' => 'active']);
-        $growth = Plan::create(['name' => 'Growth', 'price' => 20, 'status' => 'active']);
-        $this->actingAs($superadmin, 'superadmin')->get('/users/create')->assertOk()->assertDontSee('name="role"', false);
+        $this->actingAs($superadmin, 'superadmin')->get('/users/create')
+            ->assertOk()
+            ->assertDontSee('name="role"', false)
+            ->assertDontSee('name="plan_id"', false);
+        $this->assertFalse(Schema::hasColumn('users', 'plan_id'));
+
+        $this->from('/users/create')->post('/users', [
+            'name' => 'Legacy Plan User',
+            'email' => 'legacy-plan@example.com',
+            'password' => 'strong-password',
+            'password_confirmation' => 'strong-password',
+            'status' => 'active',
+            'plan_id' => 1,
+        ])->assertSessionHasErrors('plan_id');
+        $this->assertDatabaseMissing('users', ['email' => 'legacy-plan@example.com']);
 
         $this->post('/users', [
             'name' => 'Plan Member',
@@ -139,30 +221,16 @@ class UserAdministrationTest extends TestCase
             'password_confirmation' => 'strong-password',
             'status' => 'active',
             'role' => 'superadmin',
-            'plan_id' => $starter->id,
             'profile_photo' => $this->png('member.png'),
         ])->assertRedirect('/users');
 
         $user = User::where('email', 'plan-member@example.com')->firstOrFail();
         $this->assertSame('staff', $user->role);
-        $this->assertSame($starter->id, $user->plan_id);
         $oldPhoto = $user->profile_photo;
         Storage::disk('public')->assertExists($oldPhoto);
-        $this->get('/users?search=plan-member&role=staff&plan_id='.$starter->id.'&verification=unverified&status=active')
+        $this->get('/users?search=plan-member&role=staff&verification=unverified&status=active')
             ->assertOk()
-            ->assertSee('Plan Member')
-            ->assertSee('Starter');
-
-        $inactive = Plan::create(['name' => 'Archived', 'price' => 5, 'status' => 'inactive']);
-        $this->post('/users', [
-            'name' => 'Invalid Plan Member',
-            'email' => 'invalid-plan@example.com',
-            'password' => 'strong-password',
-            'password_confirmation' => 'strong-password',
-            'status' => 'active',
-            'plan_id' => $inactive->id,
-        ])->assertSessionHasErrors('plan_id');
-        $this->assertDatabaseMissing('users', ['email' => 'invalid-plan@example.com']);
+            ->assertSee('Plan Member');
 
         $this->patchJson('/users/'.$user->id.'/verification')->assertOk()->assertJson(['verified' => true]);
         $this->assertNotNull($user->fresh()->email_verified_at);
@@ -177,12 +245,10 @@ class UserAdministrationTest extends TestCase
             'password_confirmation' => '',
             'status' => 'inactive',
             'role' => 'superadmin',
-            'plan_id' => $growth->id,
             'profile_photo' => $this->png('member-updated.png'),
         ])->assertRedirect('/users');
         $user->refresh();
         $this->assertSame('staff', $user->role);
-        $this->assertSame($growth->id, $user->plan_id);
         $this->assertNull($user->email_verified_at);
         Storage::disk('public')->assertMissing($oldPhoto);
         Storage::disk('public')->assertExists($user->profile_photo);
@@ -194,14 +260,101 @@ class UserAdministrationTest extends TestCase
             'password' => '',
             'password_confirmation' => '',
             'status' => $user->status,
-            'plan_id' => $user->plan_id,
             'remove_photo' => '1',
         ])->assertRedirect('/users');
         $this->assertNull($user->fresh()->profile_photo);
         Storage::disk('public')->assertMissing($currentPhoto);
 
-        $growth->delete();
-        $this->assertNull($user->fresh()->plan_id);
+    }
+
+    public function test_superadmin_can_assign_member_and_manager_roles_from_user_management(): void
+    {
+        $superadmin = SuperAdmin::factory()->create();
+        $firstOrganization = Organization::create(['name' => 'Northwind Studio']);
+        $secondOrganization = Organization::create(['name' => 'Woodland Group']);
+        $organizations = collect([$firstOrganization, $secondOrganization])->sortBy('name')->values();
+
+        $this->actingAs($superadmin, 'superadmin')
+            ->get('/users/create')
+            ->assertOk()
+            ->assertSee('Organization access')
+            ->assertSee('Northwind Studio')
+            ->assertSee('Woodland Group')
+            ->assertSee('Manager')
+            ->assertDontSee('<option value="admin"', false);
+
+        $this->post('/users', [
+            'name' => 'Organization Administrator',
+            'email' => 'organization-admin@example.test',
+            'password' => 'strong-password',
+            'password_confirmation' => 'strong-password',
+            'status' => 'active',
+            'organization_assignments' => $organizations->map(fn (Organization $organization): array => [
+                'id' => $organization->id,
+                'role' => $organization->is($firstOrganization) ? 'member' : 'manager',
+            ])->all(),
+        ])->assertRedirect('/users');
+
+        $user = User::where('email', 'organization-admin@example.test')->firstOrFail();
+        $this->assertSame('staff', $user->role);
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $firstOrganization->id,
+            'user_id' => $user->id,
+            'role' => 'member',
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $secondOrganization->id,
+            'user_id' => $user->id,
+            'role' => 'manager',
+            'status' => 'active',
+        ]);
+
+        $firstOrganization->users()->updateExistingPivot($user->id, ['status' => 'inactive']);
+        $ownedOrganization = Organization::create([
+            'name' => 'Owned Organization',
+            'owner_user_id' => $user->id,
+        ]);
+        $ownedOrganization->users()->attach($user, ['role' => 'owner', 'status' => 'active']);
+
+        $this->get('/users/'.$user->id.'/edit')
+            ->assertOk()
+            ->assertSee('Owner')
+            ->assertSee('Organization access');
+
+        $assignments = Organization::query()->orderBy('name')->get()->map(fn (Organization $organization): array => [
+            'id' => $organization->id,
+            'role' => match ($organization->id) {
+                $firstOrganization->id => 'member',
+                $secondOrganization->id => null,
+                default => null,
+            },
+        ])->all();
+
+        $this->put('/users/'.$user->id, [
+            'name' => $user->name,
+            'email' => $user->email,
+            'password' => '',
+            'password_confirmation' => '',
+            'status' => $user->status,
+            'organization_assignments' => $assignments,
+        ])->assertRedirect('/users');
+
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $firstOrganization->id,
+            'user_id' => $user->id,
+            'role' => 'member',
+            'status' => 'inactive',
+        ]);
+        $this->assertDatabaseMissing('organization_users', [
+            'organization_id' => $secondOrganization->id,
+            'user_id' => $user->id,
+        ]);
+        $this->assertDatabaseHas('organization_users', [
+            'organization_id' => $ownedOrganization->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
     }
 
     public function test_role_changes_are_separate_and_restricted_to_superadmins(): void

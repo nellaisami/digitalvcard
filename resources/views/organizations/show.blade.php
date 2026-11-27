@@ -12,6 +12,37 @@
 <div class="plan-detail-grid">
     <section class="panel plan-detail-card">
         <div class="form-section-title"><span class="form-section-icon"><i class="fa-regular fa-building"></i></span><div><h2>Organization information</h2><p>Organization account details</p></div></div>
+        @if($organization->logo_url)
+            <img class="mb-4 h-20 w-20 rounded-lg border object-cover" src="{{ $organization->logo_url }}" alt="{{ $organization->name }} logo">
+        @endif
+        @if($canChangeLogo)
+            <form method="POST" action="{{ route('organizations.logo', $organization) }}" enctype="multipart/form-data" class="mb-5">
+                @csrf @method('PATCH')
+                <div class="form-field"><label for="organization_logo">Organization logo</label><input id="organization_logo" name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">@error('logo')<small class="field-error">{{ $message }}</small>@enderror</div>
+                @if($organization->logo_path)
+                    <label class="mb-3 inline-flex items-center gap-2"><input type="checkbox" name="remove_logo" value="1" @checked(old('remove_logo'))> Remove current logo</label>
+                @endif
+                <button class="button button-outline button-small" type="submit">{{ $organization->logo_path ? 'Update logo' : 'Upload logo' }}</button>
+            </form>
+        @endif
+        @if($canChangeTemplate)
+            <form method="POST" action="{{ route('organizations.template', $organization) }}" class="mb-5">
+                @csrf @method('PATCH')
+                <div class="form-field">
+                    <label for="organization_vcard_template">Organization vCard template</label>
+                    <select id="organization_vcard_template" name="vcard_template_id">
+                        <option value="">No template selected</option>
+                        @foreach($templates as $template)
+                            <option value="{{ $template->id }}" @selected((string) old('vcard_template_id', $organization->vcard_template_id) === (string) $template->id)>{{ $template->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('vcard_template_id')<small class="field-error">{{ $message }}</small>@enderror
+                </div>
+                <button class="button button-outline button-small" type="submit">Save template</button>
+            </form>
+        @elseif($organization->vcardTemplate)
+            <p class="plan-muted-copy">Selected vCard template: {{ $organization->vcardTemplate->name }}</p>
+        @endif
         <dl class="plan-detail-list">
             <div><dt>Name</dt><dd>{{ $organization->name }}</dd></div>
             <div><dt>Email</dt><dd>{{ $organization->email ?: '—' }}</dd></div>

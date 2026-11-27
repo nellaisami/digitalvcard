@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AuthenticationAndAdminTest extends TestCase
@@ -199,6 +200,13 @@ class AuthenticationAndAdminTest extends TestCase
             'password_confirmation' => 'New-superadmin1!',
         ])->assertRedirect('/account');
         $this->assertTrue(Hash::check('New-superadmin1!', $superadmin->fresh()->password));
+    }
+
+    public function test_superadmin_table_does_not_store_address_fields(): void
+    {
+        foreach (['address', 'city', 'country', 'postal_code'] as $column) {
+            $this->assertFalse(Schema::hasColumn('super_admins', $column));
+        }
     }
 
     public function test_account_password_requires_mixed_case_number_and_symbol(): void

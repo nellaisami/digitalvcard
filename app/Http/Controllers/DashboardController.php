@@ -75,7 +75,7 @@ class DashboardController extends Controller
         } else {
             $userIds = collect([$user->id]);
             $vcards = Vcard::where('user_id', $user->id);
-            $planIds = collect([$user->plan_id])->filter();
+            $planIds = collect();
             $activeOrganizationCount = 0;
             $activeOrganizationUserCount = 0;
             $inactiveOrganizationUserCount = 0;

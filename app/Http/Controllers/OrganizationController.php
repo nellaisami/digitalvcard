@@ -8,8 +8,10 @@ use App\Models\Organization;
 use App\Models\Plan;
 use App\Models\SuperAdmin;
 use App\Models\User;
+use App\Models\VcardTemplate;
 use App\Notifications\OrganizationMemberEmailVerificationNotification;
 use App\Notifications\OrganizationOwnerEmailVerificationNotification;
+use App\Services\OrganizationLogoManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -79,7 +81,7 @@ class OrganizationController extends Controller
                 'email' => $data['owner_email'],
                 'password' => $data['password'],
                 'contact_no' => $data['contact_no'] ?? null,
-                'role' => 'staff',
+                'role' => 'admin',
                 'status' => 'active',
             ]);
 
@@ -103,11 +105,50 @@ class OrganizationController extends Controller
     public function show(Organization $organization): View
     {
         Gate::authorize('view', $organization);
-        $organization->load(['owner', 'plan', 'users']);
+        $organization->load(['owner', 'plan', 'users', 'vcardTemplate']);
         $vcards = $organization->vcards()->with('user')->latest()->get();
         $canManageUsers = Gate::allows('manageUsers', $organization);
+        $canChangeLogo = Gate::allows('updateLogo', $organization);
+        $canChangeTemplate = Gate::allows('updateTemplate', $organization);
+        $templates = VcardTemplate::query()
+            ->where('status', 'active')
+            ->when($organization->vcard_template_id, fn ($query) => $query->orWhereKey($organization->vcard_template_id))
+            ->orderBy('name')
+            ->get();
 
-        return view('organizations.show', compact('organization', 'vcards', 'canManageUsers'));
+        return view('organizations.show', compact('organization', 'vcards', 'canManageUsers', 'canChangeLogo', 'canChangeTemplate', 'templates'));
+    }
+
+    public function updateLogo(Request $request, Organization $organization, OrganizationLogoManager $logos): RedirectResponse
+    {
+        Gate::authorize('updateLogo', $organization);
+        $data = $request->validate([
+            'logo' => ['nullable', 'required_without:remove_logo', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_logo' => ['sometimes', 'boolean'],
+        ]);
+        $logos->sync($organization, $request->file('logo'), (bool) ($data['remove_logo'] ?? false));
+
+        return redirect()->route('organizations.show', $organization)->with('status', 'Organization logo updated.');
+    }
+
+    public function updateTemplate(Request $request, Organization $organization): RedirectResponse
+    {
+        Gate::authorize('updateTemplate', $organization);
+        $data = $request->validate([
+            'vcard_template_id' => [
+                'nullable',
+                'integer',
+                Rule::exists(VcardTemplate::class, 'id')->where(function ($query) use ($organization): void {
+                    $query->where('status', 'active');
+                    if ($organization->vcard_template_id) {
+                        $query->orWhere('id', $organization->vcard_template_id);
+                    }
+                }),
+            ],
+        ]);
+        $organization->update(['vcard_template_id' => $data['vcard_template_id'] ?? null]);
+
+        return redirect()->route('organizations.show', $organization)->with('status', 'Organization vCard template updated.');
     }
 
     public function createUser(Organization $organization): View
@@ -169,9 +210,9 @@ class OrganizationController extends Controller
             $member->notify(new OrganizationMemberEmailVerificationNotification($organization));
         } else {
             $member = User::where('email', $data['email'])->firstOrFail();
-            if ($member->role !== 'staff') {
+            if ($member->role !== 'staff' && ! ($member->role === 'admin' && $request->user()->role === 'superadmin')) {
                 throw ValidationException::withMessages([
-                    'email' => 'Only standard user accounts can be added to an organization.',
+                    'email' => 'Only standard users can be added by organization managers. A Super Admin can also assign platform Admin accounts.',
                 ]);
             }
             if ($organization->users()->whereKey($member->id)->exists()) {
@@ -195,7 +236,7 @@ class OrganizationController extends Controller
     public function editUser(Organization $organization, User $member): View
     {
         Gate::authorize('manageUsers', $organization);
-        $this->ensureManageableMember($organization, $member);
+        $member = $this->ensureManageableMember($organization, $member);
 
         return view('organizations.users.edit', compact('organization', 'member'));
     }
@@ -272,9 +313,16 @@ class OrganizationController extends Controller
         $organization = $user->ownedOrganizations()->first();
         if (! $organization) {
             $organization = $user->organizations()
-                ->wherePivot('role', 'manager')
+                ->where('organization_users.role', 'manager')
                 ->wherePivot('status', 'active')
                 ->where('organizations.status', 'active')
+                ->first();
+        }
+        if (! $organization && $user->role === 'admin') {
+            $organization = $user->organizations()
+                ->wherePivot('status', 'active')
+                ->where('organizations.status', 'active')
+                ->orderBy('organizations.name')
                 ->first();
         }
         abort_unless($organization, 404);
@@ -316,7 +364,7 @@ class OrganizationController extends Controller
                     'email' => $ownerEmail,
                     'password' => $data['password'],
                     'contact_no' => $data['contact_no'] ?? null,
-                    'role' => 'staff',
+                    'role' => 'admin',
                     'status' => 'active',
                 ]);
             } else {
@@ -402,14 +450,16 @@ class OrganizationController extends Controller
         ]);
     }
 
-    public function destroy(Organization $organization): RedirectResponse
+    public function destroy(Organization $organization, OrganizationLogoManager $logos): RedirectResponse
     {
         Gate::authorize('delete', $organization);
+        $logoPath = $organization->logo_path;
         DB::transaction(function () use ($organization): void {
             $lockedOrganization = Organization::query()->lockForUpdate()->findOrFail($organization->id);
             $lockedOrganization->users()->detach();
             $lockedOrganization->delete();
         });
+        $logos->delete($logoPath);
 
         return redirect()->route('organizations.index')->with('status', 'Organization deleted. Associated user accounts and vCards were retained.');
     }
@@ -421,12 +471,14 @@ class OrganizationController extends Controller
         return [$parts[0] ?? '', $parts[1] ?? ''];
     }
 
-    private function ensureManageableMember(Organization $organization, User $member): void
+    private function ensureManageableMember(Organization $organization, User $member): User
     {
         $organizationMember = $organization->users()->whereKey($member->id)->firstOrFail();
         abort_if(
             $member->id === $organization->owner_user_id || $organizationMember->pivot->role === 'owner',
             403,
         );
+
+        return $organizationMember;
     }
 }

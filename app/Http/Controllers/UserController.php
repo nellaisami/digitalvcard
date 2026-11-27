@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\SaveUserRequest;
 use App\Http\Requests\UpdateUserRoleRequest;
-use App\Models\Plan;
 use App\Models\User;
 use App\Notifications\OrganizationOwnerEmailVerificationNotification;
+use App\Services\OrganizationMembershipManager;
 use App\Services\ProfilePhotoManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class UserController extends Controller
@@ -18,7 +19,6 @@ class UserController extends Controller
     public function index(Request $request): View
     {
         $users = User::query()
-            ->with('plan')
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = $request->string('search');
                 $query->where(fn ($query) => $query
@@ -27,7 +27,6 @@ class UserController extends Controller
                     ->orWhere('contact_no', 'like', "%{$search}%"));
             })
             ->when($request->filled('role'), fn ($query) => $query->where('role', $request->string('role')))
-            ->when($request->filled('plan_id'), fn ($query) => $query->where('plan_id', $request->integer('plan_id')))
             ->when($request->input('verification') === 'verified', fn ($query) => $query->whereNotNull('email_verified_at'))
             ->when($request->input('verification') === 'unverified', fn ($query) => $query->whereNull('email_verified_at'))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
@@ -37,26 +36,37 @@ class UserController extends Controller
 
         return view('users.index', [
             'users' => $users,
-            'plans' => Plan::orderBy('name')->get(),
             'roles' => ['admin', 'manager', 'editor', 'staff'],
         ]);
     }
 
-    public function create(): View
+    public function create(OrganizationMembershipManager $memberships): View
     {
+        $user = new User;
+
         return view('users.form', [
-            'user' => new User,
-            'plans' => Plan::where('status', 'active')->orderBy('name')->get(),
+            'user' => $user,
+            'organizations' => $memberships->organizationsForUser($user),
             'mode' => 'user',
         ]);
     }
 
-    public function store(SaveUserRequest $request, ProfilePhotoManager $photos): RedirectResponse
-    {
+    public function store(
+        SaveUserRequest $request,
+        ProfilePhotoManager $photos,
+        OrganizationMembershipManager $memberships,
+    ): RedirectResponse {
         $data = $request->validated();
         unset($data['profile_photo'], $data['remove_photo']);
+        $organizationAssignments = $data['organization_assignments'] ?? [];
+        unset($data['organization_assignments']);
         $data['role'] = 'staff';
-        $user = User::create($data);
+        $user = DB::transaction(function () use ($data, $organizationAssignments, $memberships): User {
+            $user = User::create($data);
+            $memberships->sync($user, $organizationAssignments);
+
+            return $user;
+        });
         $photos->sync($user, $request->file('profile_photo'), $request->boolean('remove_photo'));
 
         return redirect()->route('users.index')->with('status', 'User created successfully.');
@@ -64,27 +74,31 @@ class UserController extends Controller
 
     public function show(User $user): View
     {
-        $user->load('plan');
-
         return view('users.show', ['user' => $user, 'mode' => 'user']);
     }
 
-    public function edit(User $user): View
+    public function edit(User $user, OrganizationMembershipManager $memberships): View
     {
         return view('users.form', [
             'user' => $user,
-            'plans' => Plan::where('status', 'active')
-                ->when($user->plan_id, fn ($query) => $query->orWhereKey($user->plan_id))
-                ->orderBy('name')
-                ->get(),
+            'organizations' => $user->role === 'staff'
+                ? $memberships->organizationsForUser($user)
+                : collect(),
             'mode' => 'user',
         ]);
     }
 
-    public function update(SaveUserRequest $request, User $user, ProfilePhotoManager $photos): RedirectResponse
-    {
+    public function update(
+        SaveUserRequest $request,
+        User $user,
+        ProfilePhotoManager $photos,
+        OrganizationMembershipManager $memberships,
+    ): RedirectResponse {
         $data = $request->validated();
         unset($data['profile_photo'], $data['remove_photo']);
+        $syncOrganizationAssignments = array_key_exists('organization_assignments', $data);
+        $organizationAssignments = $data['organization_assignments'] ?? [];
+        unset($data['organization_assignments']);
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
@@ -93,7 +107,12 @@ class UserController extends Controller
         }
         $emailChanged = $user->email !== $data['email'];
         $ownedOrganizations = $emailChanged ? $user->ownedOrganizations()->get() : collect();
-        $user->update($data);
+        DB::transaction(function () use ($data, $user, $syncOrganizationAssignments, $organizationAssignments, $memberships): void {
+            $user->update($data);
+            if ($syncOrganizationAssignments) {
+                $memberships->sync($user, $organizationAssignments);
+            }
+        });
         $photos->sync($user, $request->file('profile_photo'), $request->boolean('remove_photo'));
         foreach ($ownedOrganizations as $organization) {
             $user->notify(new OrganizationOwnerEmailVerificationNotification($organization));
